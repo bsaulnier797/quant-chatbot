@@ -34,7 +34,8 @@ def try_render_chart(question: str):
     
     # Only match tickers that are explicitly mentioned with context
     # Look for patterns like "NVDA", "$NVDA", or known index ETFs
-    tickers = re.findall(r'\$([A-Z]{1,5})\b|\b([A-Z]{2,5})\b', question)
+    tickers = re.findall(r'\$([A-Z]{1,5})\b|\b([A-Z]{2,5})\b', question.upper())
+
     tickers = [t[0] or t[1] for t in tickers]
     
     stopwords = {
