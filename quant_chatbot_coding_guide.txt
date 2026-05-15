@@ -1,0 +1,518 @@
+================================================================================
+        FINANCE / QUANT CHATBOT — CODING GUIDE
+        What to Build, File by File
+================================================================================
+
+This guide tells you WHAT to build in each file and WHY, without giving you
+the code directly. Use your project guide .txt for reference on structure,
+and use Claude, documentation, or your own knowledge to write the actual code.
+This approach will help you actually learn the material and be able to speak
+to it confidently in interviews.
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+  1. Phase 1 — Data Layer (data/stock_data.py)
+  2. Phase 2 — LangChain Tools (agent/tools.py)
+  3. Phase 3 — LangChain Agent (agent/agent.py)
+  4. Phase 4 — Streamlit UI (app.py)
+  5. Phase 5 — Charting (charts/plotting.py)
+  6. Phase 6 — Memory (memory/memory.py)
+  7. Testing Checkpoints
+  8. Order of Operations
+
+================================================================================
+1. PHASE 1 — DATA LAYER (data/stock_data.py)
+================================================================================
+
+This is the foundation of the entire project. Every other file depends on
+this one. Build and test this completely before touching anything else.
+
+--------------------------------------------------
+WHAT THIS FILE SHOULD DO
+--------------------------------------------------
+
+This file is responsible for all data fetching and financial metric
+computation. It should have NO knowledge of LangChain, Streamlit, or the
+LLM — it is purely a data utility module.
+
+--------------------------------------------------
+IMPORTS YOU WILL NEED
+--------------------------------------------------
+
+  - yfinance: for fetching stock data from Yahoo Finance
+  - pandas: for working with the DataFrame that yfinance returns
+  - numpy: for mathematical operations like sqrt, percentile, std
+
+--------------------------------------------------
+FUNCTIONS TO WRITE
+--------------------------------------------------
+
+FUNCTION 1: get_price_history(ticker, period)
+  - What it does: fetches historical daily price data for a stock
+  - Input: a ticker string like "NVDA", and a period string like "6mo"
+  - Output: a pandas DataFrame with columns Open, High, Low, Close, Volume
+  - How: use yfinance's Ticker class and its .history() method
+  - Valid period strings: "1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "ytd", "max"
+  - Why it matters: every other function in this file takes a DataFrame as
+    input, so this is the entry point for all data
+
+FUNCTION 2: get_current_price(ticker)
+  - What it does: fetches the current live price and company info for a ticker
+  - Input: a ticker string
+  - Output: a dictionary with keys: ticker, price, currency, company_name
+  - How: use yfinance's Ticker class and its .info property, which returns
+    a large dictionary of company data. Look for "currentPrice" or
+    "regularMarketPrice" keys for the price, "longName" for the company name
+  - Why it matters: handles the "what is the current price of X" queries
+
+FUNCTION 3: compute_returns(df)
+  - What it does: computes daily percentage returns from a price DataFrame
+  - Input: a DataFrame from get_price_history
+  - Output: a pandas Series of daily returns (e.g. 0.012 means +1.2% that day)
+  - How: use pandas .pct_change() on the Close column, then drop NaN values
+  - Why it matters: daily returns are the building block for every other metric
+
+FUNCTION 4: compute_total_return(df)
+  - What it does: computes the total percentage gain or loss over the period
+  - Input: a DataFrame from get_price_history
+  - Output: a single float (e.g. 47.3 means +47.3%)
+  - Formula: ((ending price - starting price) / starting price) * 100
+  - How: use .iloc[0] for the first price and .iloc[-1] for the last price
+    on the Close column
+  - Why it matters: the most basic performance metric, always asked about
+
+FUNCTION 5: compute_annualized_volatility(df)
+  - What it does: computes how volatile a stock is, expressed as an
+    annualized percentage
+  - Input: a DataFrame from get_price_history
+  - Output: a single float representing annualized volatility as a percentage
+  - Formula: std(daily_returns) * sqrt(252) * 100
+  - Note: 252 is the number of trading days in a year. Multiplying by
+    sqrt(252) converts daily volatility to annualized volatility
+  - Why it matters: risk metric — higher volatility means more risk
+
+FUNCTION 6: compute_sharpe_ratio(df, risk_free_rate)
+  - What it does: computes the Sharpe ratio, which measures return per unit
+    of risk taken
+  - Input: a DataFrame and an optional risk_free_rate (default 0.05 = 5%)
+  - Output: a single float (higher is better; above 1.0 is generally good)
+  - Formula: (mean(daily_returns) - risk_free_rate/252) / std(daily_returns) * sqrt(252)
+  - Note: divide the annual risk-free rate by 252 to get the daily rate
+  - Edge case: if std is 0, return 0.0 to avoid division by zero
+  - Why it matters: the most important metric in quant finance interviews
+
+FUNCTION 7: compute_max_drawdown(df)
+  - What it does: finds the largest peak-to-trough decline over the period
+  - Input: a DataFrame from get_price_history
+  - Output: a negative float representing the worst drawdown as a percentage
+    (e.g. -34.2 means the stock fell 34.2% from its peak at some point)
+  - Formula: min((price - rolling_max) / rolling_max) * 100
+  - How: use pandas .cummax() to compute the rolling maximum price at each
+    point in time, then compute the drawdown at each point
+  - Why it matters: measures downside risk — how bad could it get?
+
+FUNCTION 8: compute_rolling_volatility(df, window)
+  - What it does: computes volatility over a rolling window of days
+  - Input: a DataFrame and a window size (default 30 days)
+  - Output: a pandas Series of rolling volatility values over time
+  - How: use pandas .rolling(window=window).std() on daily returns,
+    then annualize with sqrt(252) * 100
+  - Why it matters: useful for charting how risk has changed over time
+
+FUNCTION 9: compare_tickers(ticker1, ticker2, period)
+  - What it does: fetches data for two tickers and returns a side-by-side
+    comparison of their metrics
+  - Input: two ticker strings and a period
+  - Output: a dictionary where each key is a ticker and each value is
+    another dictionary containing total_return, annualized_volatility,
+    sharpe_ratio, and max_drawdown
+  - How: call get_price_history for each ticker, then call your metric
+    functions on each DataFrame
+  - Why it matters: handles "compare X vs Y" queries which are very common
+
+--------------------------------------------------
+HOW TO TEST THIS FILE
+--------------------------------------------------
+
+Before moving on, open a Python terminal or Jupyter notebook and test
+every single function:
+
+  1. Call get_price_history("NVDA", "6mo") and print the first 5 rows
+  2. Call compute_total_return on that DataFrame and verify it's a number
+  3. Call compute_sharpe_ratio and verify it's a reasonable number (between -2 and 5)
+  4. Call compare_tickers("NVDA", "SPY", "6mo") and print the result
+  5. Make sure no function throws an error
+
+Do NOT move to Phase 2 until every function works correctly.
+
+================================================================================
+2. PHASE 2 — LANGCHAIN TOOLS (agent/tools.py)
+================================================================================
+
+This file wraps your data functions as LangChain tools so the LLM agent
+can decide which one to call based on the user's question.
+
+--------------------------------------------------
+WHAT THIS FILE SHOULD DO
+--------------------------------------------------
+
+Each function in this file is decorated with @tool from LangChain, which
+tells the agent "this is a capability you can use." The function's docstring
+is critically important — the LLM reads it to decide when to use the tool.
+Write clear, specific docstrings.
+
+--------------------------------------------------
+IMPORTS YOU WILL NEED
+--------------------------------------------------
+
+  - from langchain.tools import tool
+  - Your functions from data.stock_data
+
+--------------------------------------------------
+TOOLS TO WRITE
+--------------------------------------------------
+
+TOOL 1: stock_performance_tool
+  - What it does: fetches performance metrics for a single stock
+  - Input format the LLM should send: "TICKER PERIOD" (e.g. "NVDA 6mo")
+  - What it should return: a formatted string with total return, volatility,
+    Sharpe ratio, and max drawdown for that ticker
+  - Docstring should say: use this when the user asks about how a single
+    stock has performed, its returns, or price history over a time period
+  - Inside the function: split the input string to get ticker and period,
+    call your data functions, format the results as a readable string
+
+TOOL 2: stock_comparison_tool
+  - What it does: compares two stocks side by side
+  - Input format: "TICKER1 TICKER2 PERIOD" (e.g. "NVDA SPY 6mo")
+  - What it should return: a formatted string comparing both tickers across
+    all metrics
+  - Docstring should say: use this when the user wants to compare two stocks
+    or compare a stock against a benchmark like the S&P 500 (SPY)
+  - Default the second ticker to "SPY" if not provided
+
+TOOL 3: current_price_tool
+  - What it does: gets the current live price of a stock
+  - Input format: just "TICKER" (e.g. "AAPL")
+  - What it should return: a string with the company name, ticker, and price
+  - Docstring should say: use this when the user asks for the current or
+    live price of a stock
+
+--------------------------------------------------
+IMPORTANT NOTES ON TOOL DOCSTRINGS
+--------------------------------------------------
+
+The LLM uses the docstring to decide which tool to call. If your docstrings
+are vague, the agent will pick the wrong tool. Be specific about:
+  - When to use this tool (what kinds of questions trigger it)
+  - What format the input should be in
+  - What the tool returns
+
+--------------------------------------------------
+HOW TO TEST THIS FILE
+--------------------------------------------------
+
+You can test tools directly before wiring up the agent:
+
+  from agent.tools import stock_performance_tool
+  result = stock_performance_tool.invoke("NVDA 6mo")
+  print(result)
+
+If it returns a formatted string with numbers, the tool works.
+
+================================================================================
+3. PHASE 3 — LANGCHAIN AGENT (agent/agent.py)
+================================================================================
+
+This file builds the agent that connects the LLM to your tools and handles
+the reasoning loop.
+
+--------------------------------------------------
+WHAT THIS FILE SHOULD DO
+--------------------------------------------------
+
+The agent is the brain of the chatbot. It receives a user question, decides
+which tool(s) to call, passes the results back to the LLM, and returns a
+final natural language response. This file should expose two things:
+  1. A build_agent() function that creates and returns the agent
+  2. An ask(agent, question) function that sends a question and gets a response
+
+--------------------------------------------------
+IMPORTS YOU WILL NEED
+--------------------------------------------------
+
+  - os: to read environment variables
+  - from dotenv import load_dotenv: to load your .env file
+  - from langchain_anthropic import ChatAnthropic: the LLM
+  - from langchain.agents import AgentExecutor, create_react_agent
+  - from langchain import hub: to pull a standard prompt template
+  - Your tools from agent.tools
+
+--------------------------------------------------
+WHAT TO BUILD
+--------------------------------------------------
+
+FUNCTION 1: build_agent()
+  - Call load_dotenv() at the top of the file to load your ANTHROPIC_API_KEY
+  - Create a ChatAnthropic instance using model "claude-haiku-4-5-20251014"
+    with temperature=0 (deterministic responses are better for data queries)
+    and your API key from os.getenv("ANTHROPIC_API_KEY")
+  - Create a list of your three tools
+  - Pull the standard ReAct prompt from LangChain hub using
+    hub.pull("hwchase17/react") — this is a pre-built prompt that teaches
+    the agent how to reason through which tool to use
+  - Create the agent using create_react_agent(llm, tools, prompt)
+  - Wrap it in AgentExecutor with verbose=True (so you can see its reasoning
+    in the terminal), max_iterations=5, and handle_parsing_errors=True
+  - Return the AgentExecutor
+
+FUNCTION 2: ask(agent, question)
+  - Takes the agent and a question string
+  - Calls agent.invoke({"input": question})
+  - Returns the "output" key from the result dictionary
+
+--------------------------------------------------
+HOW TO TEST THIS FILE
+--------------------------------------------------
+
+Run this in your terminal:
+
+  from agent.agent import build_agent, ask
+  agent = build_agent()
+  print(ask(agent, "How has NVDA performed over the last 6 months?"))
+  print(ask(agent, "What is the current price of Apple?"))
+
+With verbose=True you will see the agent's reasoning steps printed out —
+which tool it chose, what input it passed, and what it got back. This is
+very useful for debugging.
+
+================================================================================
+4. PHASE 4 — STREAMLIT UI (app.py)
+================================================================================
+
+This file is the front end — the actual chatbot interface the user sees
+and interacts with.
+
+--------------------------------------------------
+WHAT THIS FILE SHOULD DO
+--------------------------------------------------
+
+Build a chat interface where users type questions and see responses, with
+charts rendered below the text when relevant. The UI should feel like a
+real product — clean, labeled, and easy to use.
+
+--------------------------------------------------
+IMPORTS YOU WILL NEED
+--------------------------------------------------
+
+  - streamlit as st
+  - plotly.graph_objects as go
+  - Your build_agent and ask functions from agent.agent
+  - get_price_history from data.stock_data
+
+--------------------------------------------------
+WHAT TO BUILD
+--------------------------------------------------
+
+SECTION 1: Page config
+  - Set the page title to something like "Quant Chatbot"
+  - Set a page icon (the 📈 emoji works well)
+  - Set layout to "wide"
+
+SECTION 2: Sidebar
+  - Add a header called "Example Questions"
+  - List 5-6 example questions the user can try
+  - Add a divider and a caption crediting Yahoo Finance as the data source
+
+SECTION 3: Session state initialization
+  - Streamlit reruns the entire script on every interaction, so you need
+    to store things in st.session_state to persist them
+  - Initialize st.session_state.messages as an empty list if it doesn't exist
+  - Initialize st.session_state.agent by calling build_agent() if it doesn't
+    exist — wrap this in st.spinner("Initializing agent...") so the user
+    sees a loading message
+
+SECTION 4: Display chat history
+  - Loop through st.session_state.messages
+  - For each message, use st.chat_message(role) to display it
+  - If a message has a chart attached, render it with st.plotly_chart
+
+SECTION 5: Chat input and response
+  - Use st.chat_input() to create the message input box at the bottom
+  - When the user submits a question:
+    1. Append it to session state messages with role "user"
+    2. Display it in a user chat bubble
+    3. Call ask() to get the agent's response (wrap in st.spinner)
+    4. Display the response in an assistant chat bubble
+    5. Call try_render_chart() to attempt to render a chart
+    6. Append the response (and chart if any) to session state messages
+
+SECTION 6: try_render_chart(question) helper function
+  - This function tries to detect stock tickers in the question and render
+    a normalized price chart
+  - Use regex to find 1-5 uppercase letter sequences in the question
+  - Filter out common English words that look like tickers (HOW, THE, etc.)
+  - Determine the time period from keywords in the question
+    ("1 year" → "1y", "3 month" → "3mo", etc.)
+  - For each ticker found (limit to 3), fetch price history and normalize
+    to a base of 100 for easy visual comparison
+  - Use plotly go.Figure() and go.Scatter() to build the chart
+  - Return the figure, or None if no tickers were found
+
+--------------------------------------------------
+HOW TO RUN
+--------------------------------------------------
+
+  streamlit run app.py
+
+This opens a browser at http://localhost:8501
+
+================================================================================
+5. PHASE 5 — CHARTING (charts/plotting.py)
+================================================================================
+
+This file contains reusable chart-building functions that app.py can call.
+Separating chart logic from UI logic keeps your code clean.
+
+--------------------------------------------------
+WHAT TO BUILD
+--------------------------------------------------
+
+FUNCTION 1: plot_price_history(ticker, period)
+  - Fetches price history and plots a simple line chart of closing prices
+  - X axis: date, Y axis: closing price
+  - Title should include the ticker and period
+
+FUNCTION 2: plot_normalized_comparison(tickers, period)
+  - Takes a list of tickers and plots them all on one chart normalized to 100
+  - This makes it easy to visually compare performance regardless of price
+  - Each ticker gets its own line with a different color
+  - Include a legend
+
+FUNCTION 3: plot_rolling_volatility(ticker, period, window)
+  - Plots the rolling volatility of a stock over time
+  - X axis: date, Y axis: annualized volatility percentage
+  - Useful for showing how risk has changed
+
+--------------------------------------------------
+LIBRARY TO USE
+--------------------------------------------------
+
+Use plotly.graph_objects for all charts. Plotly charts are interactive
+(hover, zoom, pan) which makes your demo much more impressive than
+static matplotlib charts.
+
+================================================================================
+6. PHASE 6 — MEMORY (memory/memory.py)
+================================================================================
+
+This file adds conversational memory so the bot remembers earlier parts
+of the conversation and can handle follow-up questions.
+
+--------------------------------------------------
+WHAT TO BUILD
+--------------------------------------------------
+
+FUNCTION: build_memory()
+  - Create and return a ConversationBufferMemory instance from LangChain
+  - Set memory_key="chat_history" and return_messages=True
+  - This memory object gets passed into AgentExecutor when building the agent
+
+--------------------------------------------------
+HOW TO WIRE IT IN
+--------------------------------------------------
+
+Once memory.py is built, go back to agent/agent.py and:
+  - Import build_memory from memory.memory
+  - Call build_memory() inside build_agent()
+  - Pass the memory object to AgentExecutor as memory=memory
+
+Now the agent will remember context across turns in the conversation.
+
+--------------------------------------------------
+HOW TO TEST
+--------------------------------------------------
+
+With memory wired in, test follow-up questions:
+
+  ask(agent, "How has NVDA performed this year?")
+  ask(agent, "How does that compare to AMD?")
+
+The second question should understand that "that" refers to NVDA's
+performance without you having to re-specify it.
+
+================================================================================
+7. TESTING CHECKPOINTS
+================================================================================
+
+Use these checkpoints to verify each phase before moving on.
+
+  Phase 1 complete when:
+  - get_price_history("AAPL", "6mo") returns a DataFrame with 100+ rows
+  - compute_sharpe_ratio returns a number between -3 and 5
+  - compare_tickers("NVDA", "SPY", "6mo") returns a dict with both tickers
+
+  Phase 2 complete when:
+  - stock_performance_tool.invoke("NVDA 6mo") returns a formatted string
+  - stock_comparison_tool.invoke("NVDA SPY 6mo") returns a comparison string
+  - current_price_tool.invoke("AAPL") returns a price
+
+  Phase 3 complete when:
+  - ask(agent, "How has NVDA performed?") returns a natural language response
+  - ask(agent, "What is the price of Tesla?") correctly calls current_price_tool
+  - verbose=True output shows the agent choosing the right tool
+
+  Phase 4 complete when:
+  - streamlit run app.py opens a working chat interface
+  - You can type a question and get a response
+  - A chart renders below the response when a ticker is mentioned
+
+  Phase 5 complete when:
+  - Charts are clean, labeled, and interactive
+  - Normalized comparison chart shows multiple tickers on one plot
+
+  Phase 6 complete when:
+  - Follow-up questions work without re-specifying context
+  - "How does that compare to AMD?" works after asking about NVDA
+
+================================================================================
+8. ORDER OF OPERATIONS
+================================================================================
+
+Build in this exact order. Each phase depends on the previous one.
+
+  Week 1:
+    Day 1-2:  data/stock_data.py — all 9 functions, fully tested
+    Day 3-4:  agent/tools.py — all 3 tools, tested with .invoke()
+    Day 5:    agent/agent.py — build_agent() and ask(), tested in terminal
+
+  Week 2:
+    Day 6-8:  app.py — full Streamlit UI with chat and charting
+    Day 9:    charts/plotting.py — clean reusable chart functions
+    Day 10:   memory/memory.py — wire in conversational memory
+
+  Week 3-4:
+    Enhancements: portfolio analysis, news sentiment, additional quant metrics
+    Polish: clean up code, write docstrings, improve error handling
+    Deploy: push to GitHub, deploy to Streamlit Community Cloud
+    Document: write README, record demo video, post on LinkedIn
+
+--------------------------------------------------
+GENERAL TIPS
+--------------------------------------------------
+
+  - Test each function immediately after writing it, before writing the next
+  - If something breaks, isolate the problem to one function before fixing
+  - Use print() statements liberally while debugging, remove them when done
+  - Commit to GitHub every time you finish a working function or feature
+  - Read error messages carefully — Python errors almost always tell you
+    exactly what went wrong and on which line
+  - When stuck, read the official documentation for the library giving you
+    trouble before asking for help — this builds a skill that matters in
+    every data job
+
+================================================================================
+END OF DOCUMENT
+================================================================================
