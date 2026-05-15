@@ -32,6 +32,9 @@ with st.sidebar:
 def try_render_chart(question: str):
     import re
     
+    price_only_keywords = ["what is the price", "current price", "how much is", "how much does"]
+    if any(keyword in question.lower() for keyword in price_only_keywords):
+        return None
     # Only match tickers that are explicitly mentioned with context
     # Look for patterns like "NVDA", "$NVDA", or known index ETFs
     tickers = re.findall(r'\$([A-Z]{1,5})\b|\b([A-Z]{2,5})\b', question.upper())

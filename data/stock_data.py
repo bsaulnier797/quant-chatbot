@@ -22,24 +22,18 @@ def get_price_history(ticker, period='1y', interval='1d'):
         print(f"Error fetching data for {ticker}: {e}")
         return pd.DataFrame()
     
-def get_current_price(ticker):
-    """
-    Fetch the current price of a given stock ticker.
-
-    Parameters:
-    ticker (str): The stock ticker symbol (e.g., 'AAPL').
-
-    Returns:
-    float: The current price of the stock.
-    """
-    try:
-        stock = yf.Ticker(ticker)
-        current_price = stock.info['currentPrice']
-        return current_price
-    except Exception as e:
-        print(f"Error fetching current price for {ticker}: {e}")
-        return None
-    
+def get_current_price(ticker: str) -> dict:
+    stock = yf.Ticker(ticker)
+    info = stock.info
+    price = (info.get("currentPrice") or 
+             info.get("regularMarketPrice") or 
+             info.get("previousClose"))
+    return {
+        "ticker": ticker,
+        "price": price,
+        "currency": info.get("currency", "USD"),
+        "company_name": info.get("longName", ticker),
+    }
 
 def compute_returns(price_history):
     """
