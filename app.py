@@ -28,15 +28,35 @@ with st.sidebar:
 
 # try_render_chart function
 def try_render_chart(question: str):
-    tickers = re.findall(r'\b([A-Z]{1,5})\b', question.upper())
+    import re
     
-    stopwords = {"HOW", "HAS", "THE", "AND", "FOR", "OVER", "LAST", "VS",
-                 "WHAT", "IS", "OF", "IN", "A", "AN", "TO", "COMPARE",
-                 "YEAR", "MONTH", "MONTHS", "YEARS", "DAY", "DAYS", "ME",
-                 "MY", "TODAY", "MARKET", "STOCK", "PRICE", "CURRENT"}
-    tickers = [t for t in tickers if t not in stopwords]
+    # Only match tickers that are explicitly mentioned with context
+    # Look for patterns like "NVDA", "$NVDA", or known index ETFs
+    tickers = re.findall(r'\$([A-Z]{1,5})\b|\b([A-Z]{2,5})\b', question)
+    tickers = [t[0] or t[1] for t in tickers]
     
+    stopwords = {
+        "HOW", "HAS", "THE", "AND", "FOR", "OVER", "LAST", "VS",
+        "WHAT", "IS", "OF", "IN", "A", "AN", "TO", "COMPARE", "AM",
+        "YEAR", "MONTH", "MONTHS", "YEARS", "DAY", "DAYS", "ME", "DO",
+        "MY", "TODAY", "MARKET", "STOCK", "PRICE", "CURRENT", "GET",
+        "CAN", "YOU", "TELL", "ABOUT", "SHOW", "GIVE", "HELP", "IT",
+        "AT", "BY", "BE", "ARE", "WAS", "ITS", "ETF", "CEO", "CFO",
+        "USA", "GDP", "IMF", "FED", "SEC", "IPO", "YTD", "EPS", "PE"
+    }
+    
+    tickers = [t for t in tickers if t not in stopwords and len(t) >= 2]
+    
+    # Only render chart if we found at least one plausible ticker
     if not tickers:
+        return None
+    
+    # Verify the ticker actually has data before rendering
+    try:
+        test_df = get_price_history(tickers[0], "1mo")
+        if test_df.empty:
+            return None
+    except Exception:
         return None
     
     period = "6mo"
@@ -60,6 +80,8 @@ def try_render_chart(question: str):
                 mode="lines",
                 name=ticker
             ))
+        if not fig.data:
+            return None
         fig.update_layout(
             title="Normalized Price Performance (Base = 100)",
             xaxis_title="Date",
@@ -70,7 +92,6 @@ def try_render_chart(question: str):
         return fig
     except Exception:
         return None
-
 
 # Session state
 if "messages" not in st.session_state:
