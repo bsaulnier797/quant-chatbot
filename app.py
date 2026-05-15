@@ -68,19 +68,48 @@ if prompt := st.chat_input("Ask a question about stocks or markets..."):
     })
 
 
-    # try render helper function
-def try_render_chart(prompt):
-    # This is a placeholder implementation. You would need to implement logic to parse the prompt,
-    # determine if a chart is needed, and then generate the appropriate chart using Plotly or another library.
-    # For example, if the prompt asks for the price history of a stock, you could fetch the data and create a line chart.
+def try_render_chart(question: str):
+    import re
+    
+    tickers = re.findall(r'\b([A-Z]{1,5})\b', question.upper())
+    
+    stopwords = {"HOW", "HAS", "THE", "AND", "FOR", "OVER", "LAST", "VS",
+                 "WHAT", "IS", "OF", "IN", "A", "AN", "TO", "COMPARE",
+                 "YEAR", "MONTH", "MONTHS", "YEARS", "DAY", "DAYS", "ME",
+                 "MY", "TODAY", "MARKET", "STOCK", "PRICE", "CURRENT"}
+    tickers = [t for t in tickers if t not in stopwords]
+    
+    if not tickers:
+        return None
+    
+    period = "6mo"
+    if "1 year" in question.lower() or "1y" in question.lower():
+        period = "1y"
+    elif "3 month" in question.lower():
+        period = "3mo"
+    elif "ytd" in question.lower():
+        period = "ytd"
+    
     try:
-        if "price history" in prompt.lower():
-            ticker = prompt.split()[0]  # This is a very naive way to extract the ticker
-            df = get_price_history(ticker, "6mo")  # Fetch 6 months of data as an example
-            fig = go.Figure(data=go.Scatter(x=df.index, y=df['Close'], mode='lines', name='Close Price'))
-            fig.update_layout(title=f"{ticker} Price History", xaxis_title="Date", yaxis_title="Price")
-            return fig
-    except Exception as e:
-        print(f"Error rendering chart for prompt '{prompt}': {e}")
+        fig = go.Figure()
+        for ticker in tickers[:3]:
+            df = get_price_history(ticker, period)
+            if df.empty:
+                continue
+            normalized = (df["Close"] / df["Close"].iloc[0]) * 100
+            fig.add_trace(go.Scatter(
+                x=df.index,
+                y=normalized,
+                mode="lines",
+                name=ticker
+            ))
+        fig.update_layout(
+            title="Normalized Price Performance (Base = 100)",
+            xaxis_title="Date",
+            yaxis_title="Normalized Price",
+            hovermode="x unified"
+        )
+        return fig
+    except Exception:
         return None
 
