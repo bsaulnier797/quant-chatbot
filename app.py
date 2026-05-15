@@ -2,75 +2,32 @@ import streamlit as st
 import plotly.graph_objects as go
 from agent.agent import build_agent, ask
 from data.stock_data import get_price_history
+import re
 
 
 # Page Configuration
-st.set_page_config(page_title="Quant Chatbot", layout="wide")
+st.set_page_config(page_title="Quant Chatbot", page_icon="📈", layout="wide")
 
-# Sidebar for user input
-st.sidebar.title("Quant Chatbot")
-user_input = st.sidebar.text_input("Ask a question about stocks (e.g. 'How has NVDA performed over the last 6 months?')")
-# Credit for yahoo finance data
-st.sidebar.markdown("Data source: [Yahoo Finance](https://finance.yahoo.com/)")
-
-# Session state to store conversation history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# initialize agent if not already done
-if "agent" not in st.session_state:
-    st.session_state.agent = build_agent()
-
-# spinner while waiting for response
-if st.sidebar.button("Ask"):
-    if user_input:
-        with st.spinner("Thinking..."):
-            response = ask(st.session_state.agent, user_input)
-            st.session_state.messages.append({"role": "user", "content": user_input})
-            st.session_state.messages.append({"role": "assistant", "content": response})
-
-# Display conversation history
-for message in st.session_state.messages:
-    if message["role"] == "user":
-        st.markdown(f"**You:** {message['content']}")
-    else:
-        st.markdown(f"**Bot:** {message['content']}")
-
-def try_render_chart(prompt):
-    raise NotImplementedError
-
-# Chat input and response display 
-
-if prompt := st.chat_input("Ask a question about stocks or markets..."):
-    
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    
-    with st.chat_message("user"):
-        st.markdown(prompt)
-    
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            response = ask(st.session_state.agent, prompt)
-        
-        st.markdown(response)
-        
-        # 5. Try to render a chart
-        chart = try_render_chart(prompt)
-        if chart:
-            st.plotly_chart(chart, use_container_width=True)
-        else:
-            chart = None
-    
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": response,
-        "chart": chart
-    })
+st.title("📈 Finance & Quant Chatbot")
+st.caption("Ask natural language questions about stocks, returns, volatility, and more.")
 
 
+# Sidebar
+with st.sidebar:
+    st.header("Example Questions")
+    st.markdown("""
+    - How has NVDA performed over the last 6 months?
+    - Compare TSLA and SPY over the last year
+    - What is the current price of Apple?
+    - What is the Sharpe ratio of MSFT over 1 year?
+    - Compare AAPL and GOOGL over 3 months
+    """)
+    st.divider()
+    st.caption("Data sourced from Yahoo Finance via yfinance.")
+
+
+# try_render_chart function
 def try_render_chart(question: str):
-    import re
-    
     tickers = re.findall(r'\b([A-Z]{1,5})\b', question.upper())
     
     stopwords = {"HOW", "HAS", "THE", "AND", "FOR", "OVER", "LAST", "VS",
@@ -107,9 +64,51 @@ def try_render_chart(question: str):
             title="Normalized Price Performance (Base = 100)",
             xaxis_title="Date",
             yaxis_title="Normalized Price",
-            hovermode="x unified"
+            hovermode="x unified",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02)
         )
         return fig
     except Exception:
         return None
 
+
+# Session state
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+if "agent" not in st.session_state:
+    with st.spinner("Initializing agent..."):
+        st.session_state.agent = build_agent()
+
+
+# Display chat history
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+        if "chart" in message and message["chart"] is not None:
+            st.plotly_chart(message["chart"], use_container_width=True)
+
+
+# Chat input and response
+if prompt := st.chat_input("Ask a question about stocks or markets..."):
+
+    st.session_state.messages.append({"role": "user", "content": prompt})
+
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            response = ask(st.session_state.agent, prompt)
+
+        st.markdown(response)
+
+        chart = try_render_chart(prompt)
+        if chart:
+            st.plotly_chart(chart, use_container_width=True)
+
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": response,
+        "chart": chart
+    })
