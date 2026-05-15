@@ -53,11 +53,21 @@ TOOL_DEFINITIONS = [
 def build_agent():
     load_dotenv()
     
+    api_key = None
+    
+    # Try Streamlit secrets first
     try:
         import streamlit as st
-        api_key = st.secrets["ANTHROPIC_API_KEY"]
-    except Exception:
+        api_key = st.secrets.get("ANTHROPIC_API_KEY")
+    except Exception as e:
+        pass
+    
+    # Fall back to environment variable
+    if not api_key:
         api_key = os.getenv("ANTHROPIC_API_KEY")
+    
+    if not api_key:
+        raise ValueError("ANTHROPIC_API_KEY not found in Streamlit secrets or environment variables")
     
     client = anthropic.Anthropic(api_key=api_key)
     return client
