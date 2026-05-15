@@ -15,7 +15,7 @@ def stock_performance_tool(input: str) -> str:
     """
     Use this tool when the user asks how a stock has performed, its returns,
     volatility, or price history over a time period.
-    Input format: 'TICKER PERIOD' (e.g. 'NVDA 6mo' or 'AAPL 1y')
+    Input format: TICKER PERIOD (e.g. NVDA 6mo or AAPL 1y)
     Valid periods: 1mo, 3mo, 6mo, 1y, 2y, 5y, ytd, max
     """
     parts = input.strip().split()
@@ -23,10 +23,17 @@ def stock_performance_tool(input: str) -> str:
     period = parts[1] if len(parts) > 1 else "6mo"
 
     df = get_price_history(ticker, period)
+    
+    if df.empty:
+        return f"Could not fetch data for {ticker}. Please check the ticker symbol."
+    
     total_return = compute_total_return(df)
     volatility = compute_annualized_volatility(df)
     sharpe = compute_sharpe_ratio(df)
     drawdown = compute_max_drawdown(df)
+
+    if any(v is None for v in [total_return, volatility, sharpe, drawdown]):
+        return f"Could not compute metrics for {ticker}. Please try again."
 
     return (
         f"{ticker} over {period}: "
@@ -35,7 +42,6 @@ def stock_performance_tool(input: str) -> str:
         f"Sharpe Ratio: {sharpe:.2f}, "
         f"Max Drawdown: {drawdown:.2%}"
     )
-
 
 @tool
 def stock_comparison_tool(input: str) -> str:
