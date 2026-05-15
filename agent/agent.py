@@ -51,9 +51,16 @@ TOOL_DEFINITIONS = [
 
 
 def build_agent():
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    load_dotenv()
+    
+    try:
+        import streamlit as st
+        api_key = st.secrets["ANTHROPIC_API_KEY"]
+    except Exception:
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+    
+    client = anthropic.Anthropic(api_key=api_key)
     return client
-
 
 def ask(client, question: str) -> str:
     messages = [{"role": "user", "content": question}]
