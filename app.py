@@ -126,7 +126,7 @@ if prompt := st.chat_input("Ask a question about stocks or markets..."):
 
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            response = ask(st.session_state.agent, prompt)
+            response = ask(st.session_state.agent, prompt, mode=mode.lower())
 
         st.markdown(response)
 

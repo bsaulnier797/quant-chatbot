@@ -77,13 +77,35 @@ def ask(client, question: str, mode: str = "expert") -> str:
     else:
         system = """You are a quantitative finance analyst. Be concise and 
         precise. Use correct financial terminology."""
-    
+
     messages = [{"role": "user", "content": question}]
-    
-    response = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=1024,
-        system=system,
-        tools=TOOL_DEFINITIONS,
-        messages=messages
-    )
+
+    while True:
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            system=system,
+            tools=TOOL_DEFINITIONS,
+            messages=messages
+        )
+
+        if response.stop_reason == "end_turn":
+            for block in response.content:
+                if hasattr(block, "text"):
+                    return block.text
+
+        if response.stop_reason == "tool_use":
+            messages.append({"role": "assistant", "content": response.content})
+            tool_results = []
+            for block in response.content:
+                if block.type == "tool_use":
+                    tool_name = block.name
+                    tool_input = block.input.get("input", "")
+                    tool_fn = TOOL_MAP.get(tool_name)
+                    result = tool_fn.invoke(tool_input) if tool_fn else "Tool not found"
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": result
+                    })
+            messages.append({"role": "user", "content": tool_results})
