@@ -11,6 +11,8 @@ st.set_page_config(page_title="Quant Chatbot", page_icon="📈", layout="wide")
 st.title("📈 Finance & Quant Chatbot")
 st.caption("Ask natural language questions about stocks, returns, volatility, and more.")
 
+# learning vs expert mode
+mode = st.radio("Select Mode", ["Expert", "Learning"], horizontal=True)
 
 # Sidebar
 with st.sidebar:
