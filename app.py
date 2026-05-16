@@ -193,7 +193,6 @@ def try_render_chart(question: str):
     return None
 
 
-# Session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -201,13 +200,11 @@ if "agent" not in st.session_state:
     with st.spinner("Initializing agent..."):
         st.session_state.agent = build_agent()
 
-# Follow-up questions and memory
+if "followups" not in st.session_state:
+    st.session_state.followups = []
 
-if "follow_up" not in st.session_state:
-    st.session_state.follow_up = []
-
-if "pending_prompts" not in st.session_state:
-    st.session_state.pending_prompts = None
+if "pending_prompt" not in st.session_state:
+    st.session_state.pending_prompt = None
 
 
 
