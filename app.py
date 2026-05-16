@@ -42,14 +42,18 @@ def try_render_chart(question: str):
     tickers = [t[0] or t[1] for t in tickers]
     
     stopwords = {
-        "HOW", "HAS", "THE", "AND", "FOR", "OVER", "LAST", "VS",
-        "WHAT", "IS", "OF", "IN", "A", "AN", "TO", "COMPARE", "AM",
-        "YEAR", "MONTH", "MONTHS", "YEARS", "DAY", "DAYS", "ME", "DO",
-        "MY", "TODAY", "MARKET", "STOCK", "PRICE", "CURRENT", "GET",
-        "CAN", "YOU", "TELL", "ABOUT", "SHOW", "GIVE", "HELP", "IT",
-        "AT", "BY", "BE", "ARE", "WAS", "ITS", "ETF", "CEO", "CFO",
-        "USA", "GDP", "IMF", "FED", "SEC", "IPO", "YTD", "EPS", "PE"
-    }
+    "HOW", "HAS", "THE", "AND", "FOR", "OVER", "LAST", "VS",
+    "WHAT", "IS", "OF", "IN", "A", "AN", "TO", "COMPARE", "AM",
+    "YEAR", "MONTH", "MONTHS", "YEARS", "DAY", "DAYS", "ME", "DO",
+    "MY", "TODAY", "MARKET", "STOCK", "PRICE", "CURRENT", "GET",
+    "CAN", "YOU", "TELL", "ABOUT", "SHOW", "GIVE", "HELP", "IT",
+    "AT", "BY", "BE", "ARE", "WAS", "ITS", "ETF", "CEO", "CFO",
+    "USA", "GDP", "IMF", "FED", "SEC", "IPO", "YTD", "EPS", "PE",
+    "LEARN", "GOOD", "SOME", "TOOLS", "STILL", "GAVE", "THIS",
+    "PROMPT", "GRAPH", "FINANCE", "THESE", "THAT", "WITH", "BEST",
+    "USE", "USING", "USED", "MORE", "MOST", "LESS", "ALSO", "JUST",
+    "LIKE", "WANT", "NEED", "KNOW", "DOES", "DID", "WILL", "WOULD"
+}
     
     tickers = [t for t in tickers if t not in stopwords and len(t) >= 2]
     
