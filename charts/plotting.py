@@ -80,7 +80,7 @@ def plot_correlation_heatmap(data, tickers):
         z=corr.values,
         x=corr.columns,
         y=corr.index,
-        colorscale='Viridis',
+        colorscale="RdBu_r",
         zmin=-1,
         zmax=1
     ))

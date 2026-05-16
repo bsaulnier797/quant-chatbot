@@ -28,7 +28,7 @@ TABLE OF CONTENTS
      2.4  News Sentiment Integration
      2.5  Sector & Industry Analysis
 
-  3. Data & Charting Features
+  3. Data & Charting Features (DONE)
      3.1  Candlestick Charts with Volume
      3.2  Moving Averages Overlay
      3.3  Returns Distribution Chart
