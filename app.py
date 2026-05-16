@@ -56,6 +56,38 @@ with st.sidebar:
     st.divider()
     st.caption("Data sourced from Yahoo Finance via yfinance.")
 
+# Generate Follow-up Questions
+def generate_followups(client, question: str, response: str, mode: str) -> list:
+    """
+    Generate 3 relevant follow-up questions based on the last exchange.
+    Returns a list of 3 short question strings.
+    """
+    try:
+        prompt = f"""The user asked: "{question}"
+The assistant responded: "{response[:600]}"
+
+Generate exactly 3 short follow-up questions the user might want to ask next.
+They should be specific, natural, and directly related to what was just discussed.
+Return only a JSON array of 3 strings, nothing else.
+Example: ["What is its Sharpe ratio?", "How does that compare to SPY?", "Show me the returns distribution"]"""
+
+        result = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=200,
+            system="You generate follow-up questions. Return only a JSON array of 3 strings.",
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        import json
+        text = result.content[0].text.strip()
+        # Strip markdown code fences if present
+        text = text.replace("```json", "").replace("```", "").strip()
+        questions = json.loads(text)
+        return questions[:3] if isinstance(questions, list) else []
+
+    except Exception:
+        return []
+
 
 # try_render_chart function
 def try_render_chart(question: str):
@@ -169,6 +201,18 @@ if "agent" not in st.session_state:
     with st.spinner("Initializing agent..."):
         st.session_state.agent = build_agent()
 
+# Follow-up questions and memory
+
+if "follow_up" not in st.session_state:
+    st.session_state.follow_up = []
+
+if "pending_prompts" not in st.session_state:
+    st.session_state.pending_prompts = None
+
+
+
+
+
 
 # Display chat history
 for message in st.session_state.messages:
@@ -178,6 +222,48 @@ for message in st.session_state.messages:
             st.plotly_chart(message["chart"], use_container_width=True)
 
 
+# follow ups
+if st.session_state.pending_prompt:
+    prompt = st.session_state.pending_prompt
+    st.session_state.pending_prompt = None
+    st.session_state.followups = []
+
+    st.session_state.messages.append({"role": "user", "content": prompt})
+
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            response = ask(st.session_state.agent, prompt, mode.lower(),
+                           history=st.session_state.messages)
+        st.markdown(response)
+
+        chart = try_render_chart(prompt)
+        if chart:
+            st.plotly_chart(chart, use_container_width=True)
+
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": response,
+        "chart": chart
+    })
+
+    st.session_state.followups = generate_followups(
+        st.session_state.agent, prompt, response, mode.lower()
+    )
+    st.rerun()  
+
+# Show follow-up question buttons
+if st.session_state.followups:
+    st.markdown("**Suggested follow-ups:**")
+    cols = st.columns(3)
+    for i, question in enumerate(st.session_state.followups):
+        with cols[i]:
+            if st.button(question, key=f"followup_{i}", use_container_width=True):
+                st.session_state.pending_prompt = question
+                st.session_state.followups = []
+                st.rerun()
 # Chat input and response
 # Chat input and response
 if prompt := st.chat_input("Ask a question about stocks or markets..."):
