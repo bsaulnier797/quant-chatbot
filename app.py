@@ -41,7 +41,9 @@ with st.sidebar:
         "Correlation",
         "Beta",
         "Alpha"
-    ])
+    ],
+    index=0
+    )
     
     
 
