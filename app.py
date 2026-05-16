@@ -32,6 +32,11 @@ with st.sidebar:
     st.divider()
     # Learn about finance with clickable sections for volatility, Sharpe ratio, drawdown, etc.
     st.header("Quick Learning")
+    st.divider()
+    # clear chat history button
+    if st.button("Clear Chat History"):
+        st.session_state.messages = []
+
 
     selected_concept = st.selectbox("Select a concept to learn about:", [
         "None",
