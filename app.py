@@ -57,11 +57,9 @@ with st.sidebar:
     st.caption("Data sourced from Yahoo Finance via yfinance.")
 
 # Generate Follow-up Questions
-def generate_followups(client, question: str, response: str, mode: str) -> list:
-    """
-    Generate 3 relevant follow-up questions based on the last exchange.
-    Returns a list of 3 short question strings.
-    """
+def generate_followups(question: str, response: str, mode: str) -> list:
+    import anthropic, json, os
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
     try:
         prompt = f"""The user asked: "{question}"
 The assistant responded: "{response[:600]}"
@@ -77,15 +75,12 @@ Example: ["What is its Sharpe ratio?", "How does that compare to SPY?", "Show me
             system="You generate follow-up questions. Return only a JSON array of 3 strings.",
             messages=[{"role": "user", "content": prompt}]
         )
-
-        import json
         text = result.content[0].text.strip()
-        # Strip markdown code fences if present
         text = text.replace("```json", "").replace("```", "").strip()
         questions = json.loads(text)
         return questions[:3] if isinstance(questions, list) else []
-
-    except Exception:
+    except Exception as e:
+        print(f"Follow-up error: {e}")
         return []
 
 
@@ -247,8 +242,9 @@ if st.session_state.pending_prompt:
     })
 
     st.session_state.followups = generate_followups(
-        st.session_state.agent, prompt, response, mode.lower()
+        prompt, response, mode.lower()
     )
+    
     st.rerun()  
 
 # Show follow-up question buttons
@@ -336,6 +332,8 @@ if prompt := st.chat_input("Ask a question about stocks or markets..."):
         "chart": chart
     })
 
+st.session_state.followups = generate_followups(prompt, response, mode.lower())
+st.rerun()
 
 if selected_concept and selected_concept != "None":
     with st.expander(f"Learn about {selected_concept}"):
