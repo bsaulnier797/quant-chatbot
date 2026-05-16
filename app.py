@@ -30,6 +30,22 @@ with st.sidebar:
     - Compare AAPL and GOOGL over 3 months
     """)
     st.divider()
+    # Learn about finance with clickable sections for volatility, Sharpe ratio, drawdown, etc.
+    st.header("Learn About Finance")
+
+    selected_concept = st.selectbox("Select a concept to learn about:", [
+        "Volatility",
+        "Sharpe Ratio",
+        "Max Drawdown",
+        "Total Return",
+        "Correlation",
+        "Beta",
+        "Alpha"
+    ])
+    
+    
+
+    st.divider()
     st.caption("Data sourced from Yahoo Finance via yfinance.")
 
 
@@ -136,6 +152,15 @@ def try_render_chart(question: str):
 
     return None
 
+
+# Learning vs Expert tabs in which learning is specifically for learning more about finance while expert also has the expert and learn chat mode
+tab1, tab2 = st.tabs(["Expert Mode", "Learning Mode"])
+
+with tab1:
+    st.subheader("Expert Mode")
+    st.caption("Ask any question about stocks, markets, returns, volatility, and more. The agent will use tools to fetch data and provide insights.")
+    mode = "expert"
+
 # Session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -227,3 +252,45 @@ if prompt := st.chat_input("Ask a question about stocks or markets..."):
         "content": response,
         "chart": chart
     })
+
+
+if selected_concept and selected_concept != "Select a concept to learn about:":
+    with st.expander(f"Learn about {selected_concept}"):
+        if selected_concept == "Volatility":
+            st.markdown("""
+            **Volatility** is a measure of how much a stock's price fluctuates over time. 
+            A stock with high volatility has large price swings, while a stock with low volatility has more stable prices. 
+            Volatility is often measured using the standard deviation of returns or the annualized volatility formula.
+            """)
+        elif selected_concept == "Sharpe Ratio":
+            st.markdown("""
+            The **Sharpe Ratio** is a measure of risk-adjusted return. It tells you how much excess return you are getting for each unit of risk you take on. 
+            A higher Sharpe ratio indicates better risk-adjusted performance. The formula is: 
+            Sharpe Ratio = (Return of the Portfolio - Risk-Free Rate) / Standard Deviation of the Portfolio's Excess Return.
+            """)
+        elif selected_concept == "Max Drawdown":
+            st.markdown("""
+            **Max Drawdown** is the largest percentage drop from a peak to a trough in the value of an investment. 
+            It measures the worst-case loss an investor could have experienced during a specific period. 
+            A smaller max drawdown indicates less severe losses during downturns.
+            """)
+        elif selected_concept == "Total Return":
+            st.markdown("""
+            **Total Return** is the overall return on an investment, including both capital gains and dividends. 
+            It is calculated as: Total Return = (Ending Value - Beginning Value + Dividends) / Beginning Value.
+            """)
+        elif selected_concept == "Correlation":
+            st.markdown("""
+            **Correlation** measures the strength and direction of the linear relationship between two variables. 
+            It ranges from -1 to 1, where -1 indicates a perfect negative correlation, 0 indicates no correlation, and 1 indicates a perfect positive correlation.
+            """)
+        elif selected_concept == "Beta":
+            st.markdown("""
+            **Beta** is a measure of a stock's volatility in relation to the overall market. 
+            A beta of 1 indicates that the stock's price tends to move in line with the market, while a beta greater than 1 indicates higher volatility and a beta less than 1 indicates lower volatility.
+            """)
+        elif selected_concept == "Alpha":
+            st.markdown("""
+            **Alpha** represents the excess return of an investment relative to the return of a benchmark index. 
+            It measures the skill of the portfolio manager in generating returns above the market average.
+            """)
