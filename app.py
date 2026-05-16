@@ -3,7 +3,12 @@ import plotly.graph_objects as go
 from agent.agent import build_agent, ask
 from data.stock_data import get_price_history
 import re
-
+from charts.plotting import (
+    plot_candlestick_chart,
+    plot_with_moving_averages,
+    plot_returns_distribution,
+    plot_correlation_heatmap
+)
 
 # Page Configuration
 st.set_page_config(page_title="Quant Chatbot", page_icon="📈", layout="wide")
@@ -31,44 +36,49 @@ with st.sidebar:
 # try_render_chart function
 def try_render_chart(question: str):
     import re
-    
+
+    # Don't render for price-only questions
     price_only_keywords = ["what is the price", "current price", "how much is", "how much does"]
     if any(keyword in question.lower() for keyword in price_only_keywords):
         return None
-    # Only match tickers that are explicitly mentioned with context
-    # Look for patterns like "NVDA", "$NVDA", or known index ETFs
-    tickers = re.findall(r'\$([A-Z]{1,5})\b|\b([A-Z]{2,5})\b', question.upper())
 
+    # Find tickers
+    tickers = re.findall(r'\$([A-Z]{1,5})\b|\b([A-Z]{2,5})\b', question.upper())
     tickers = [t[0] or t[1] for t in tickers]
-    
+
     stopwords = {
-    "HOW", "HAS", "THE", "AND", "FOR", "OVER", "LAST", "VS",
-    "WHAT", "IS", "OF", "IN", "A", "AN", "TO", "COMPARE", "AM",
-    "YEAR", "MONTH", "MONTHS", "YEARS", "DAY", "DAYS", "ME", "DO",
-    "MY", "TODAY", "MARKET", "STOCK", "PRICE", "CURRENT", "GET",
-    "CAN", "YOU", "TELL", "ABOUT", "SHOW", "GIVE", "HELP", "IT",
-    "AT", "BY", "BE", "ARE", "WAS", "ITS", "ETF", "CEO", "CFO",
-    "USA", "GDP", "IMF", "FED", "SEC", "IPO", "YTD", "EPS", "PE",
-    "LEARN", "GOOD", "SOME", "TOOLS", "STILL", "GAVE", "THIS",
-    "PROMPT", "GRAPH", "FINANCE", "THESE", "THAT", "WITH", "BEST",
-    "USE", "USING", "USED", "MORE", "MOST", "LESS", "ALSO", "JUST",
-    "LIKE", "WANT", "NEED", "KNOW", "DOES", "DID", "WILL", "WOULD"
-}
-    
+        "HOW", "HAS", "THE", "AND", "FOR", "OVER", "LAST", "VS",
+        "WHAT", "IS", "OF", "IN", "A", "AN", "TO", "COMPARE", "AM",
+        "YEAR", "MONTH", "MONTHS", "YEARS", "DAY", "DAYS", "ME", "DO",
+        "MY", "TODAY", "MARKET", "STOCK", "PRICE", "CURRENT", "GET",
+        "CAN", "YOU", "TELL", "ABOUT", "SHOW", "GIVE", "HELP", "IT",
+        "AT", "BY", "BE", "ARE", "WAS", "ITS", "ETF", "CEO", "CFO",
+        "USA", "GDP", "IMF", "FED", "SEC", "IPO", "YTD", "EPS", "PE",
+        "LEARN", "GOOD", "SOME", "TOOLS", "STILL", "GAVE", "THIS",
+        "PROMPT", "GRAPH", "FINANCE", "THESE", "THAT", "WITH", "BEST",
+        "USE", "USING", "USED", "MORE", "MOST", "LESS", "ALSO", "JUST",
+        "LIKE", "WANT", "NEED", "KNOW", "DOES", "DID", "WILL", "WOULD",
+        "GIVE", "FULL", "COMPLETE", "ANALYSIS", "INCLUDING", "TELL"
+    }
+
     tickers = [t for t in tickers if t not in stopwords and len(t) >= 2]
-    
-    # Only render chart if we found at least one plausible ticker
+
+    # Validate tickers have real data
+    validated_tickers = []
+    for ticker in tickers[:3]:
+        try:
+            df = get_price_history(ticker, "5d")
+            if not df.empty:
+                validated_tickers.append(ticker)
+        except Exception:
+            pass
+
+    tickers = validated_tickers
+
     if not tickers:
         return None
-    
-    # Verify the ticker actually has data before rendering
-    try:
-        test_df = get_price_history(tickers[0], "1mo")
-        if test_df.empty:
-            return None
-    except Exception:
-        return None
-    
+
+    # Determine period
     period = "6mo"
     if "1 year" in question.lower() or "1y" in question.lower():
         period = "1y"
@@ -76,32 +86,55 @@ def try_render_chart(question: str):
         period = "3mo"
     elif "ytd" in question.lower():
         period = "ytd"
-    
+
+    question_lower = question.lower()
+
     try:
-        fig = go.Figure()
-        for ticker in tickers[:3]:
-            df = get_price_history(ticker, period)
-            if df.empty:
-                continue
-            normalized = (df["Close"] / df["Close"].iloc[0]) * 100
-            fig.add_trace(go.Scatter(
-                x=df.index,
-                y=normalized,
-                mode="lines",
-                name=ticker
-            ))
-        if not fig.data:
-            return None
-        fig.update_layout(
-            title="Normalized Price Performance (Base = 100)",
-            xaxis_title="Date",
-            yaxis_title="Normalized Price",
-            hovermode="x unified",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02)
-        )
-        return fig
+        # Correlation heatmap — multiple tickers
+        if len(tickers) > 1 and any(word in question_lower for word in ["correlat", "heatmap", "portfolio", "compare"]):
+            return plot_correlation_heatmap(None, tickers)
+
+        # Returns distribution
+        if any(word in question_lower for word in ["distribution", "returns distribution", "histogram"]):
+            df = get_price_history(tickers[0], period)
+            return plot_returns_distribution(df, tickers[0])
+
+        # Moving averages
+        if any(word in question_lower for word in ["moving average", "ma50", "ma20", "trend"]):
+            df = get_price_history(tickers[0], period)
+            return plot_with_moving_averages(df, tickers[0])
+
+        # Candlestick — default for single ticker performance questions
+        if len(tickers) == 1:
+            df = get_price_history(tickers[0], period)
+            return plot_candlestick_chart(df, tickers[0])
+
+        # Normalized comparison — multiple tickers
+        if len(tickers) > 1:
+            fig = go.Figure()
+            for ticker in tickers:
+                df = get_price_history(ticker, period)
+                if df.empty:
+                    continue
+                normalized = (df["Close"] / df["Close"].iloc[0]) * 100
+                fig.add_trace(go.Scatter(
+                    x=df.index,
+                    y=normalized,
+                    mode="lines",
+                    name=ticker
+                ))
+            fig.update_layout(
+                title="Normalized Price Performance (Base = 100)",
+                xaxis_title="Date",
+                yaxis_title="Normalized Price",
+                hovermode="x unified"
+            )
+            return fig
+
     except Exception:
         return None
+
+    return None
 
 # Session state
 if "messages" not in st.session_state:
@@ -121,6 +154,7 @@ for message in st.session_state.messages:
 
 
 # Chat input and response
+# Chat input and response
 if prompt := st.chat_input("Ask a question about stocks or markets..."):
 
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -130,13 +164,63 @@ if prompt := st.chat_input("Ask a question about stocks or markets..."):
 
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            response = ask(st.session_state.agent, prompt, mode=mode.lower())
+            response = ask(st.session_state.agent, prompt, mode.lower())
 
         st.markdown(response)
 
-        chart = try_render_chart(prompt)
-        if chart:
-            st.plotly_chart(chart, use_container_width=True)
+        # Render multiple charts for full analysis questions
+        question_lower = prompt.lower()
+        local_stopwords = {
+            "HOW", "HAS", "THE", "AND", "FOR", "OVER", "LAST", "VS",
+            "WHAT", "IS", "OF", "IN", "A", "AN", "TO", "COMPARE", "AM",
+            "YEAR", "MONTH", "MONTHS", "YEARS", "DAY", "DAYS", "ME", "DO",
+            "MY", "TODAY", "MARKET", "STOCK", "PRICE", "CURRENT", "GET",
+            "CAN", "YOU", "TELL", "ABOUT", "SHOW", "GIVE", "HELP", "IT",
+            "AT", "BY", "BE", "ARE", "WAS", "ITS", "ETF", "CEO", "CFO",
+            "USA", "GDP", "IMF", "FED", "SEC", "IPO", "YTD", "EPS", "PE",
+            "LEARN", "GOOD", "SOME", "TOOLS", "STILL", "GAVE", "THIS",
+            "PROMPT", "GRAPH", "FINANCE", "THESE", "THAT", "WITH", "BEST",
+            "USE", "USING", "USED", "MORE", "MOST", "LESS", "ALSO", "JUST",
+            "LIKE", "WANT", "NEED", "KNOW", "DOES", "DID", "WILL", "WOULD",
+            "GIVE", "FULL", "COMPLETE", "ANALYSIS", "INCLUDING", "TELL"
+        }
+
+        if "full analysis" in question_lower or "complete analysis" in question_lower:
+            validated = []
+            for t in re.findall(r'\b([A-Z]{2,5})\b', prompt.upper()):
+                if t not in local_stopwords:
+                    try:
+                        df = get_price_history(t, "5d")
+                        if not df.empty:
+                            validated.append(t)
+                    except Exception:
+                        pass
+                if len(validated) == 2:
+                    break
+
+            if validated:
+                period = "1y" if "year" in question_lower else "6mo"
+                df = get_price_history(validated[0], period)
+
+                st.subheader("📊 Price Chart")
+                st.plotly_chart(plot_candlestick_chart(df, validated[0]), use_container_width=True)
+
+                st.subheader("📈 Moving Averages")
+                st.plotly_chart(plot_with_moving_averages(df, validated[0]), use_container_width=True)
+
+                st.subheader("📉 Returns Distribution")
+                st.plotly_chart(plot_returns_distribution(df, validated[0]), use_container_width=True)
+
+                if len(validated) > 1:
+                    st.subheader("🔥 Correlation Heatmap")
+                    st.plotly_chart(plot_correlation_heatmap(None, validated), use_container_width=True)
+
+            chart = None
+
+        else:
+            chart = try_render_chart(prompt)
+            if chart:
+                st.plotly_chart(chart, use_container_width=True)
 
     st.session_state.messages.append({
         "role": "assistant",
