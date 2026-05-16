@@ -31,9 +31,10 @@ with st.sidebar:
     """)
     st.divider()
     # Learn about finance with clickable sections for volatility, Sharpe ratio, drawdown, etc.
-    st.header("Learn About Finance")
+    st.header("Quick Learning")
 
     selected_concept = st.selectbox("Select a concept to learn about:", [
+        "None",
         "Volatility",
         "Sharpe Ratio",
         "Max Drawdown",
@@ -248,7 +249,7 @@ if prompt := st.chat_input("Ask a question about stocks or markets..."):
     })
 
 
-if selected_concept and selected_concept != "Select a concept to learn about:":
+if selected_concept and selected_concept != "None":
     with st.expander(f"Learn about {selected_concept}"):
         if selected_concept == "Volatility":
             st.markdown("""
