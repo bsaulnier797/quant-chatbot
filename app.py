@@ -155,14 +155,6 @@ def try_render_chart(question: str):
     return None
 
 
-# Learning vs Expert tabs in which learning is specifically for learning more about finance while expert also has the expert and learn chat mode
-tab1, tab2 = st.tabs(["Expert Mode", "Learning Mode"])
-
-with tab1:
-    st.subheader("Expert Mode")
-    st.caption("Ask any question about stocks, markets, returns, volatility, and more. The agent will use tools to fetch data and provide insights.")
-    mode = "expert"
-
 # Session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
