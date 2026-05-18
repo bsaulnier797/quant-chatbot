@@ -47,53 +47,6 @@ def stock_performance_tool(input: str) -> str:
 
 
 @tool
-def stock_comparison_tool(input: str) -> str:
-    """
-    Use this tool when the user wants to compare two stocks or compare a stock
-    against a benchmark like the S&P 500 (SPY).
-    Input format: 'TICKER1 TICKER2 PERIOD' (e.g. 'NVDA SPY 6mo')
-    If no second ticker is given, default to SPY as the benchmark.
-    Valid periods: 1mo, 3mo, 6mo, 1y, 2y, 5y, ytd, max
-    """
-    parts = input.strip().split()
-    if not parts:
-        return "Please provide at least one ticker symbol."
-    ticker1 = parts[0].upper()
-    ticker2 = parts[1].upper() if len(parts) > 1 else "SPY"
-    period = parts[2] if len(parts) > 2 else "6mo"
-
-    valid_periods = {"1mo", "3mo", "6mo", "1y", "2y", "5y", "ytd", "max"}
-    if ticker2.lower() in valid_periods:
-        period = ticker2.lower()
-        ticker2 = "SPY"
-
-    result = compare_tickers(ticker1, ticker2, period)
-
-    if isinstance(result, str):
-        return result
-
-    lines = [f"Comparison over {period}:"]
-    for ticker, metrics in result.items():
-        tr = metrics.get("total_return")
-        vol = metrics.get("annualized_volatility")
-        sharpe = metrics.get("sharpe_ratio")
-        dd = metrics.get("max_drawdown")
-
-        if any(v is None for v in [tr, vol, sharpe, dd]):
-            lines.append(f"{ticker}: Could not compute metrics.")
-            continue
-
-        lines.append(
-            f"{ticker}:\n"
-            f"  Total Return: {tr:.2%}\n"
-            f"  Volatility: {vol:.2%}\n"
-            f"  Sharpe: {sharpe:.2f}\n"
-            f"  Max Drawdown: {dd:.2%}"
-        )
-    return "\n".join(lines)
-
-
-@tool
 def plot_current_price(input: str) -> str:
     """
     Use this tool when the user asks for the current or live price of a stock.

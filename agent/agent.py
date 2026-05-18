@@ -3,7 +3,6 @@ from dotenv import load_dotenv
 import anthropic
 from agent.tools import (
     stock_performance_tool,
-    stock_comparison_tool,
     plot_current_price,
     plot_comparison_table,
     plot_price_history
@@ -13,7 +12,6 @@ load_dotenv()
 
 TOOLS = [
     stock_performance_tool,
-    stock_comparison_tool,
     plot_current_price,
     plot_comparison_table,
     plot_price_history
@@ -21,7 +19,6 @@ TOOLS = [
 
 TOOL_MAP = {
     "stock_performance_tool": stock_performance_tool,
-    "stock_comparison_tool": stock_comparison_tool,
     "plot_current_price": plot_current_price,
     "plot_comparison_table": plot_comparison_table,
     "plot_price_history": plot_price_history,
@@ -35,17 +32,6 @@ TOOL_DEFINITIONS = [
             "type": "object",
             "properties": {
                 "input": {"type": "string", "description": "TICKER PERIOD e.g. 'NVDA 6mo'"}
-            },
-            "required": ["input"]
-        }
-    },
-    {
-        "name": "stock_comparison_tool",
-        "description": "Use when the user wants to compare two stocks against each other or against a benchmark like SPY. Input format: 'TICKER1 TICKER2 PERIOD' e.g. 'NVDA SPY 6mo'",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "input": {"type": "string", "description": "TICKER1 TICKER2 PERIOD e.g. 'NVDA SPY 6mo'"}
             },
             "required": ["input"]
         }
