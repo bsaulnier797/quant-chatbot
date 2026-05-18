@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 import anthropic
+from datetime import datetime
 from agent.tools import (
     stock_performance_tool,
     plot_current_price,
@@ -85,28 +86,14 @@ TOOL_DEFINITIONS = [
     }
 ]
 
-def build_agent():
-    load_dotenv()
-    
-    api_key = None
-    
-    try:
-        import streamlit as st
-        api_key = st.secrets["anthropic"]["api_key"]
-    except Exception:
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-    
-    if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY not found")
-    
-    client = anthropic.Anthropic(api_key=api_key)
-    return client
 
-# Interaction ask function with memory and tool use handling
+def get_system_prompt(mode: str) -> str:
+    today = datetime.today().strftime("%B %d, %Y")
 
-def ask(client, question: str, mode: str = "expert", history: list = None) -> str:
+    date_context = f"Today's date is {today}. Use this when interpreting time-sensitive questions like 'this year', 'last month', or 'ytd'.\n\n"
+
     if mode == "learning":
-        system = """You are a friendly and encouraging finance teacher helping someone 
+        return date_context + """You are a friendly and encouraging finance teacher helping someone 
 with no finance or math background understand the stock market and investing.
 
 ## Your Teaching Style
@@ -136,8 +123,9 @@ with no finance or math background understand the stock market and investing.
 - If showing metrics, always say whether a high or low number is good and why
 - Never provide personalized investment advice or recommend specific trades
 - If data is unavailable, say so clearly rather than guessing"""
+
     else:
-        system = """You are an expert quantitative finance AI assistant with deep knowledge of financial markets, 
+        return date_context + """You are an expert quantitative finance AI assistant with deep knowledge of financial markets, 
 investment analysis, and data science. You help users analyze securities, interpret market data, 
 build and understand quantitative models, and explore financial concepts.
 
@@ -162,6 +150,28 @@ build and understand quantitative models, and explore financial concepts.
 - Use structured formatting (headers, bullet points) for multi-part explanations
 - For code, default to Python and keep examples concise and runnable
 - Flag if a question falls outside financial analysis scope"""
+
+
+def build_agent():
+    load_dotenv()
+
+    api_key = None
+
+    try:
+        import streamlit as st
+        api_key = st.secrets["anthropic"]["api_key"]
+    except Exception:
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+
+    if not api_key:
+        raise ValueError("ANTHROPIC_API_KEY not found")
+
+    client = anthropic.Anthropic(api_key=api_key)
+    return client
+
+
+def ask(client, question: str, mode: str = "expert", history: list = None) -> str:
+    system = get_system_prompt(mode)
 
     # Build messages with conversation history
     messages = []
@@ -204,46 +214,3 @@ build and understand quantitative models, and explore financial concepts.
                         "content": result
                     })
             messages.append({"role": "user", "content": tool_results})
-
-# def ask(client, question: str, mode: str = "expert") -> str:
-#     if mode == "learning":
-#         system = """You are a friendly finance teacher explaining concepts to 
-#         someone with no finance background. When you show metrics like Sharpe 
-#         ratio or volatility, always explain what they mean in plain English 
-#         with a simple analogy before showing the numbers. Use encouraging 
-#         language and avoid jargon."""
-#     else:
-#         system = """You are a quantitative finance analyst. Be concise and 
-#         precise. Use correct financial terminology."""
-
-#     messages = [{"role": "user", "content": question}]
-
-#     while True:
-#         response = client.messages.create(
-#             model="claude-haiku-4-5-20251001",
-#             max_tokens=1024,
-#             system=system,
-#             tools=TOOL_DEFINITIONS,
-#             messages=messages
-#         )
-
-#         if response.stop_reason == "end_turn":
-#             for block in response.content:
-#                 if hasattr(block, "text"):
-#                     return block.text
-
-#         if response.stop_reason == "tool_use":
-#             messages.append({"role": "assistant", "content": response.content})
-#             tool_results = []
-#             for block in response.content:
-#                 if block.type == "tool_use":
-#                     tool_name = block.name
-#                     tool_input = block.input.get("input", "")
-#                     tool_fn = TOOL_MAP.get(tool_name)
-#                     result = tool_fn.invoke(tool_input) if tool_fn else "Tool not found"
-#                     tool_results.append({
-#                         "type": "tool_result",
-#                         "tool_use_id": block.id,
-#                         "content": result
-#                     })
-#             messages.append({"role": "user", "content": tool_results})
