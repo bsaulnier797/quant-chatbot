@@ -1,7 +1,9 @@
 import yfinance as yf
 import pandas as pd 
 import numpy as np
+import streamlit as st
 
+@st.cache_data(ttl=300)
 def get_price_history(ticker, period='1y', interval='1d'):
     """
     Fetch historical price data for a given stock ticker.
@@ -21,7 +23,8 @@ def get_price_history(ticker, period='1y', interval='1d'):
     except Exception as e:
         print(f"Error fetching data for {ticker}: {e}")
         return pd.DataFrame()
-    
+
+@st.cache_data(ttl=600) 
 def get_current_price(ticker: str) -> dict:
     stock = yf.Ticker(ticker)
     info = stock.info
