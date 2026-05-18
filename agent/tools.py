@@ -82,4 +82,53 @@ def current_price_tool(input: str) -> str:
     if price is None:
         return f"Could not fetch current price for {ticker}."
 
-    return f"{ticker} current price: ${price}"
+    price_data = get_current_price(ticker)
+    return (f"{price_data['company_name']} ({ticker}): "
+        f"${price_data['price']} {price_data['currency']}")
+
+
+# Charts and visualizations
+def plot_price_history(data, ticker):
+    import plotly.graph_objects as go
+    
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close Price'))
+
+    fig.update_layout(
+        title=f"{ticker} Price History",
+        xaxis_title="Date",
+        yaxis_title="Price",
+        hovermode="x unified"
+    )
+    return fig
+
+def plot_current_price(price_data, ticker):
+    import plotly.graph_objects as go
+    
+    fig = go.Figure(data=[go.Indicator(
+        mode="number",
+        value=price_data['price'],
+        title={"text": f"{price_data['company_name']} ({ticker}) Current Price"},
+        number={"prefix": f"${price_data['currency']} "}
+    )])
+    
+    return fig
+
+# Comparing multiple tickers at once (as many as the user wants) with a table of metrics
+def plot_comparison_table(comparison_data):
+    import plotly.graph_objects as go
+    
+    headers = ["Ticker", "Total Return", "Annualized Volatility", "Sharpe Ratio", "Max Drawdown"]
+    values = [
+        [ticker] + [f"{metrics['total_return']:.2%}", f"{metrics['annualized_volatility']:.2%}", f"{metrics['sharpe_ratio']:.2f}", f"{metrics['max_drawdown']:.2%}"] 
+        for ticker, metrics in comparison_data.items()
+    ]
+    
+    fig = go.Figure(data=[go.Table(
+        header=dict(values=headers, fill_color='paleturquoise', align='left'),
+        cells=dict(values=list(zip(*values)), fill_color='lavender', align='left'))
+    ])
+    
+    fig.update_layout(title="Stock Comparison")
+    return fig
+
