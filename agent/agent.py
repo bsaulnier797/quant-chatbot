@@ -5,7 +5,8 @@ from agent.tools import (
     stock_performance_tool,
     plot_current_price,
     plot_comparison_table,
-    plot_price_history
+    plot_price_history,
+    monte_carlo_simulation_tool
 )
 
 load_dotenv()
@@ -14,7 +15,8 @@ TOOLS = [
     stock_performance_tool,
     plot_current_price,
     plot_comparison_table,
-    plot_price_history
+    plot_price_history,
+    monte_carlo_simulation_tool
 ]
 
 TOOL_MAP = {
@@ -22,6 +24,7 @@ TOOL_MAP = {
     "plot_current_price": plot_current_price,
     "plot_comparison_table": plot_comparison_table,
     "plot_price_history": plot_price_history,
+    "monte_carlo_simulation_tool": monte_carlo_simulation_tool
 }
 
 TOOL_DEFINITIONS = [
@@ -60,7 +63,7 @@ TOOL_DEFINITIONS = [
     },
     {
         "name": "plot_comparison_table",
-        "description": "Use when the user wants to compare multiple stocks side by side in a table. Input format: 'TICKER1 TICKER2 PERIOD' e.g. 'NVDA AAPL 6mo'",
+        "description": "Use when the user wants to compare multiple stocks side by side. Defaults to SPY if only one ticker given. Input format: 'TICKER1 TICKER2 PERIOD' e.g. 'NVDA AAPL 6mo'",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -68,9 +71,19 @@ TOOL_DEFINITIONS = [
             },
             "required": ["input"]
         }
+    },
+    {
+        "name": "monte_carlo_simulation_tool",
+        "description": "Use when the user asks about future price scenarios, risk analysis, probability of gains or losses, or Monte Carlo simulation. Models a range of possible outcomes based on historical volatility — not a price prediction. Input format: 'TICKER PERIOD' e.g. 'NVDA 1y'",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "input": {"type": "string", "description": "TICKER PERIOD e.g. 'NVDA 1y'"}
+            },
+            "required": ["input"]
+        }
     }
 ]
-
 
 def build_agent():
     load_dotenv()

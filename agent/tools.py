@@ -9,6 +9,7 @@ from data.stock_data import (
     compare_tickers
 )
 import plotly.graph_objects as go
+import numpy as np
 
 
 @tool
@@ -144,3 +145,117 @@ def plot_comparison_table(input: str) -> str:
         )
 
     return "\n".join(lines)
+
+
+# Monte Carlo simulation for future price paths with warning that this is not financial advice and create a 95% confidence interval for future price range based on historical volatility
+def plot_monte_carlo_simulation(data, ticker):
+    import plotly.graph_objects as go
+    from data.stock_data import compute_returns
+    import numpy as np
+
+    # Fix — use compute_returns for daily return series, not compute_total_return
+    daily_returns = compute_returns(data)
+    mu = daily_returns.mean()
+    sigma = daily_returns.std()
+    last_price = data['Close'].iloc[-1]
+
+    num_simulations = 1000
+    num_days = 252
+
+    simulated_paths = []
+    for _ in range(num_simulations):
+        shocks = np.random.normal(mu - 0.5 * sigma ** 2, sigma, num_days)
+        price_path = last_price * np.exp(np.cumsum(shocks))
+        simulated_paths.append(price_path)
+
+    simulated_paths = np.array(simulated_paths)
+
+    fig = go.Figure()
+
+    # Simulated paths
+    for path in simulated_paths:
+        fig.add_trace(go.Scatter(
+            x=np.arange(num_days), y=path,
+            mode='lines', line=dict(color='blue', width=0.5),
+            opacity=0.05, showlegend=False
+        ))
+
+    # Percentile bands
+    fig.add_trace(go.Scatter(
+        x=np.arange(num_days),
+        y=np.percentile(simulated_paths, 5, axis=0),
+        mode='lines', line=dict(color='red', width=2),
+        name='5th Percentile (Worst Case)'
+    ))
+    fig.add_trace(go.Scatter(
+        x=np.arange(num_days),
+        y=np.percentile(simulated_paths, 50, axis=0),
+        mode='lines', line=dict(color='green', width=2),
+        name='50th Percentile (Median)'
+    ))
+    fig.add_trace(go.Scatter(
+        x=np.arange(num_days),
+        y=np.percentile(simulated_paths, 95, axis=0),
+        mode='lines', line=dict(color='blue', width=2),
+        name='95th Percentile (Best Case)'
+    ))
+
+    fig.update_layout(
+        title=f"{ticker} Monte Carlo Simulation — 1,000 Paths, 1 Year Forward",
+        xaxis_title="Trading Days",
+        yaxis_title="Simulated Price ($)",
+        hovermode="x unified"
+    )
+    return fig
+
+
+@tool
+def monte_carlo_simulation_tool(input: str) -> str:
+    """
+    Use this tool when the user asks about future price scenarios, risk analysis,
+    probability of gains or losses, or Monte Carlo simulation for a stock.
+    This models a range of possible outcomes — not a prediction.
+    Input format: 'TICKER PERIOD' (e.g. 'NVDA 1y')
+    Valid periods: 1mo, 3mo, 6mo, 1y, 2y, 5y
+    """
+    parts = input.strip().split()
+    if not parts:
+        return "Please provide a ticker symbol."
+    ticker = parts[0].upper()
+    period = parts[1] if len(parts) > 1 else "1y"
+
+    df = get_price_history(ticker, period)
+    if df.empty:
+        return f"Could not fetch data for {ticker}. Please check the ticker symbol."
+
+    from data.stock_data import compute_returns
+    import numpy as np
+
+    daily_returns = compute_returns(df)
+    mu = daily_returns.mean()
+    sigma = daily_returns.std()
+    last_price = df['Close'].iloc[-1]
+
+    num_simulations = 1000
+    num_days = 252
+    simulated_paths = np.array([
+        last_price * np.exp(np.cumsum(np.random.normal(mu - 0.5 * sigma ** 2, sigma, num_days)))
+        for _ in range(num_simulations)
+    ])
+
+    final_prices = simulated_paths[:, -1]
+    prob_gain = (final_prices > last_price).mean()
+    p5 = np.percentile(final_prices, 5)
+    p50 = np.percentile(final_prices, 50)
+    p95 = np.percentile(final_prices, 95)
+
+    return (
+        f"{ticker} Monte Carlo Simulation (1,000 paths, 1 year forward):\n"
+        f"  Current Price: ${last_price:.2f}\n"
+        f"  Median Outcome (50th percentile): ${p50:.2f}\n"
+        f"  Worst Case (5th percentile): ${p5:.2f}\n"
+        f"  Best Case (95th percentile): ${p95:.2f}\n"
+        f"  Probability of Gain: {prob_gain:.1%}\n\n"
+        f"  Note: This is a statistical model based on historical volatility, "
+        f"not a price prediction. Past volatility does not guarantee future results."
+    )
