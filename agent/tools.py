@@ -8,6 +8,7 @@ from data.stock_data import (
     compute_max_drawdown,
     compare_tickers
 )
+import plotly.graph_objects as go
 
 
 @tool
@@ -19,14 +20,15 @@ def stock_performance_tool(input: str) -> str:
     Valid periods: 1mo, 3mo, 6mo, 1y, 2y, 5y, ytd, max
     """
     parts = input.strip().split()
+    if not parts:
+        return "Please provide a ticker symbol."
     ticker = parts[0].upper()
     period = parts[1] if len(parts) > 1 else "6mo"
 
     df = get_price_history(ticker, period)
-    
     if df.empty:
         return f"Could not fetch data for {ticker}. Please check the ticker symbol."
-    
+
     total_return = compute_total_return(df)
     volatility = compute_annualized_volatility(df)
     sharpe = compute_sharpe_ratio(df)
@@ -36,12 +38,13 @@ def stock_performance_tool(input: str) -> str:
         return f"Could not compute metrics for {ticker}. Please try again."
 
     return (
-        f"{ticker} over {period}: "
-        f"Total Return: {total_return:.2%}, "
-        f"Annualized Volatility: {volatility:.2%}, "
-        f"Sharpe Ratio: {sharpe:.2f}, "
-        f"Max Drawdown: {drawdown:.2%}"
+        f"{ticker} over {period}:\n"
+        f"  Total Return: {total_return:.2%}\n"
+        f"  Annualized Volatility: {volatility:.2%}\n"
+        f"  Sharpe Ratio: {sharpe:.2f}\n"
+        f"  Max Drawdown: {drawdown:.2%}"
     )
+
 
 @tool
 def stock_comparison_tool(input: str) -> str:
@@ -53,82 +56,138 @@ def stock_comparison_tool(input: str) -> str:
     Valid periods: 1mo, 3mo, 6mo, 1y, 2y, 5y, ytd, max
     """
     parts = input.strip().split()
+    if not parts:
+        return "Please provide at least one ticker symbol."
     ticker1 = parts[0].upper()
     ticker2 = parts[1].upper() if len(parts) > 1 else "SPY"
     period = parts[2] if len(parts) > 2 else "6mo"
 
+    valid_periods = {"1mo", "3mo", "6mo", "1y", "2y", "5y", "ytd", "max"}
+    if ticker2.lower() in valid_periods:
+        period = ticker2.lower()
+        ticker2 = "SPY"
+
     result = compare_tickers(ticker1, ticker2, period)
+
+    if isinstance(result, str):
+        return result
 
     lines = [f"Comparison over {period}:"]
     for ticker, metrics in result.items():
+        tr = metrics.get("total_return")
+        vol = metrics.get("annualized_volatility")
+        sharpe = metrics.get("sharpe_ratio")
+        dd = metrics.get("max_drawdown")
+
+        if any(v is None for v in [tr, vol, sharpe, dd]):
+            lines.append(f"{ticker}: Could not compute metrics.")
+            continue
+
         lines.append(
-            f"{ticker}: Return={metrics['total_return']:.2%}, "
-            f"Volatility={metrics['annualized_volatility']:.2%}, "
-            f"Sharpe={metrics['sharpe_ratio']:.2f}, "
-            f"Max Drawdown={metrics['max_drawdown']:.2%}"
+            f"{ticker}:\n"
+            f"  Total Return: {tr:.2%}\n"
+            f"  Volatility: {vol:.2%}\n"
+            f"  Sharpe: {sharpe:.2f}\n"
+            f"  Max Drawdown: {dd:.2%}"
         )
     return "\n".join(lines)
 
 
 @tool
-def current_price_tool(input: str) -> str:
+def plot_current_price(input: str) -> str:
     """
     Use this tool when the user asks for the current or live price of a stock.
+    Also use for questions like 'what is Apple trading at' or 'how much is TSLA'.
     Input format: 'TICKER' (e.g. 'AAPL')
     """
     ticker = input.strip().upper()
-    price = get_current_price(ticker)
+    price_data = get_current_price(ticker)
 
-    if price is None:
+    if price_data is None:
         return f"Could not fetch current price for {ticker}."
 
-    price_data = get_current_price(ticker)
-    return (f"{price_data['company_name']} ({ticker}): "
-        f"${price_data['price']} {price_data['currency']}")
+    if price_data.get("price") == "unavailable":
+        return "Yahoo Finance is rate limiting requests. Try again in a moment."
 
-
-# Charts and visualizations
-def plot_price_history(data, ticker):
-    import plotly.graph_objects as go
-    
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close Price'))
-
-    fig.update_layout(
-        title=f"{ticker} Price History",
-        xaxis_title="Date",
-        yaxis_title="Price",
-        hovermode="x unified"
+    return (
+        f"{price_data['company_name']} ({ticker}): "
+        f"${price_data['price']} {price_data['currency']}"
     )
-    return fig
 
-def plot_current_price(price_data, ticker):
-    import plotly.graph_objects as go
-    
-    fig = go.Figure(data=[go.Indicator(
-        mode="number",
-        value=price_data['price'],
-        title={"text": f"{price_data['company_name']} ({ticker}) Current Price"},
-        number={"prefix": f"${price_data['currency']} "}
-    )])
-    
-    return fig
 
-# Comparing multiple tickers at once (as many as the user wants) with a table of metrics
-def plot_comparison_table(comparison_data):
-    import plotly.graph_objects as go
-    
-    headers = ["Ticker", "Total Return", "Annualized Volatility", "Sharpe Ratio", "Max Drawdown"]
-    values = [
-        [ticker] + [f"{metrics['total_return']:.2%}", f"{metrics['annualized_volatility']:.2%}", f"{metrics['sharpe_ratio']:.2f}", f"{metrics['max_drawdown']:.2%}"] 
-        for ticker, metrics in comparison_data.items()
-    ]
-    
-    fig = go.Figure(data=[go.Table(
-        header=dict(values=headers, fill_color='paleturquoise', align='left'),
-        cells=dict(values=list(zip(*values)), fill_color='lavender', align='left'))
-    ])
-    
-    fig.update_layout(title="Stock Comparison")
-    return fig
+@tool
+def plot_price_history(input: str) -> str:
+    """
+    Use this tool to generate a price history chart for a stock over a specified period.
+    Input format: 'TICKER PERIOD' (e.g. 'NVDA 6mo')
+    Valid periods: 1mo, 3mo, 6mo, 1y, 2y, 5y, ytd, max
+    """
+    parts = input.strip().split()
+    if not parts:
+        return "Please provide a ticker symbol."
+    ticker = parts[0].upper()
+    period = parts[1] if len(parts) > 1 else "6mo"
 
+    df = get_price_history(ticker, period)
+    if df.empty:
+        return f"Could not fetch data for {ticker}. Please check the ticker symbol."
+
+    start = df["Close"].iloc[0]
+    end = df["Close"].iloc[-1]
+    total_return = (end - start) / start
+
+    return (
+        f"{ticker} price history over {period}:\n"
+        f"  Start: ${start:.2f}\n"
+        f"  End: ${end:.2f}\n"
+        f"  Total Return: {total_return:.2%}"
+    )
+
+
+@tool
+def plot_comparison_table(input: str) -> str:
+    """
+    Use this tool to compare multiple stocks side by side over a specified period.
+    Input format: 'TICKER1 TICKER2 PERIOD' (e.g. 'NVDA AAPL 6mo')
+    Valid periods: 1mo, 3mo, 6mo, 1y, 2y, 5y, ytd, max
+    """
+    parts = input.strip().split()
+    if len(parts) < 2:
+        return "Please provide at least two ticker symbols."
+
+    valid_periods = {"1mo", "3mo", "6mo", "1y", "2y", "5y", "ytd", "max"}
+    if parts[-1].lower() in valid_periods:
+        period = parts[-1].lower()
+        tickers = [t.upper() for t in parts[:-1]]
+    else:
+        period = "6mo"
+        tickers = [t.upper() for t in parts]
+
+    if len(tickers) < 2:
+        return "Please provide at least two ticker symbols to compare."
+
+    lines = [f"Comparison table over {period}:"]
+    for ticker in tickers:
+        df = get_price_history(ticker, period)
+        if df.empty:
+            lines.append(f"{ticker}: Could not fetch data.")
+            continue
+
+        tr = compute_total_return(df)
+        vol = compute_annualized_volatility(df)
+        sharpe = compute_sharpe_ratio(df)
+        dd = compute_max_drawdown(df)
+
+        if any(v is None for v in [tr, vol, sharpe, dd]):
+            lines.append(f"{ticker}: Could not compute metrics.")
+            continue
+
+        lines.append(
+            f"{ticker}:\n"
+            f"  Total Return: {tr:.2%}\n"
+            f"  Volatility: {vol:.2%}\n"
+            f"  Sharpe: {sharpe:.2f}\n"
+            f"  Max Drawdown: {dd:.2%}"
+        )
+
+    return "\n".join(lines)

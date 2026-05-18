@@ -1,16 +1,30 @@
 import os
 from dotenv import load_dotenv
 import anthropic
-from agent.tools import stock_performance_tool, stock_comparison_tool, current_price_tool, plot_comparison_table, plot_price_history, plot_current_price
+from agent.tools import (
+    stock_performance_tool,
+    stock_comparison_tool,
+    plot_current_price,
+    plot_comparison_table,
+    plot_price_history
+)
 
 load_dotenv()
 
-TOOLS = [stock_performance_tool, stock_comparison_tool, current_price_tool]
+TOOLS = [
+    stock_performance_tool,
+    stock_comparison_tool,
+    plot_current_price,
+    plot_comparison_table,
+    plot_price_history
+]
 
 TOOL_MAP = {
     "stock_performance_tool": stock_performance_tool,
     "stock_comparison_tool": stock_comparison_tool,
-    "current_price_tool": current_price_tool,
+    "plot_current_price": plot_current_price,
+    "plot_comparison_table": plot_comparison_table,
+    "plot_price_history": plot_price_history,
 }
 
 TOOL_DEFINITIONS = [
@@ -27,7 +41,7 @@ TOOL_DEFINITIONS = [
     },
     {
         "name": "stock_comparison_tool",
-        "description": "Use when the user wants to compare two stocks. Input format: 'TICKER1 TICKER2 PERIOD' e.g. 'NVDA SPY 6mo'",
+        "description": "Use when the user wants to compare two stocks against each other or against a benchmark like SPY. Input format: 'TICKER1 TICKER2 PERIOD' e.g. 'NVDA SPY 6mo'",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -37,12 +51,34 @@ TOOL_DEFINITIONS = [
         }
     },
     {
-        "name": "current_price_tool",
-        "description": "Use when the user asks for the current price of a stock. Input format: 'TICKER' e.g. 'AAPL'",
+        "name": "plot_current_price",
+        "description": "Use when the user asks for the current or live price of a stock. Also use for 'what is X trading at' or 'how much is X'. Input format: 'TICKER' e.g. 'AAPL'",
         "input_schema": {
             "type": "object",
             "properties": {
                 "input": {"type": "string", "description": "TICKER e.g. 'AAPL'"}
+            },
+            "required": ["input"]
+        }
+    },
+    {
+        "name": "plot_price_history",
+        "description": "Use when the user wants to see price history or a price chart for a stock. Input format: 'TICKER PERIOD' e.g. 'NVDA 6mo'",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "input": {"type": "string", "description": "TICKER PERIOD e.g. 'NVDA 6mo'"}
+            },
+            "required": ["input"]
+        }
+    },
+    {
+        "name": "plot_comparison_table",
+        "description": "Use when the user wants to compare multiple stocks side by side in a table. Input format: 'TICKER1 TICKER2 PERIOD' e.g. 'NVDA AAPL 6mo'",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "input": {"type": "string", "description": "TICKER1 TICKER2 PERIOD e.g. 'NVDA AAPL 6mo'"}
             },
             "required": ["input"]
         }
