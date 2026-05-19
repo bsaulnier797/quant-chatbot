@@ -3,36 +3,46 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 import time
+from data.database import (
+    save_price_history,
+    load_price_history,
+    is_data_fresh,
+    FRESHNESS_DAILY_HISTORY
+)
+from pipeline.transform import clean_price_history
 
-@st.cache_data(ttl=300)
+
 def get_price_history(ticker, period='1y', interval='1d'):
-    """
-    Fetch historical price data for a given stock ticker.
-    """
+    if is_data_fresh(ticker, "daily_history", FRESHNESS_DAILY_HISTORY):
+        df = load_price_history(ticker, "daily_history")
+        if not df.empty:
+            return df
+
     for attempt in range(3):
         try:
             stock = yf.Ticker(ticker)
             history = stock.history(period=period, interval=interval)
-            return history
+            if not history.empty:
+                cleaned = clean_price_history(history, ticker)
+                save_price_history(ticker, cleaned, "daily_history")
+                return cleaned
         except Exception as e:
             if attempt < 2:
                 time.sleep(2 ** attempt)
                 continue
             print(f"Error fetching data for {ticker}: {e}")
             return pd.DataFrame()
+    return pd.DataFrame()
+
 
 @st.cache_data(ttl=60)
 def get_current_price(ticker: str) -> dict:
-    """
-    Fetch current price for a given stock ticker.
-    Falls back to price history if .info is rate limited.
-    """
     for attempt in range(3):
         try:
             stock = yf.Ticker(ticker)
             info = stock.info
-            price = (info.get("currentPrice") or 
-                     info.get("regularMarketPrice") or 
+            price = (info.get("currentPrice") or
+                     info.get("regularMarketPrice") or
                      info.get("previousClose"))
             return {
                 "ticker": ticker,
@@ -44,7 +54,6 @@ def get_current_price(ticker: str) -> dict:
             if attempt < 2:
                 time.sleep(2 ** attempt)
                 continue
-            # Fallback — get last close from price history
             try:
                 df = get_price_history(ticker, "5d")
                 if not df.empty:
@@ -65,61 +74,63 @@ def get_current_price(ticker: str) -> dict:
                 "error": "Yahoo Finance rate limit — try again in a moment"
             }
 
+
 def compute_returns(price_history):
-    if 'Close' not in price_history.columns:
-        print("Price history must contain a 'Close' column.")
+    if price_history.empty or 'Close' not in price_history.columns:
         return pd.Series()
-    returns = price_history['Close'].pct_change().dropna()
-    return returns
+    return price_history['Close'].pct_change().dropna()
+
 
 def compute_total_return(price_history):
-    if 'Close' not in price_history.columns:
-        print("Price history must contain a 'Close' column.")
+    if price_history.empty or 'Close' not in price_history.columns:
+        return None
+    if len(price_history) < 2:
         return None
     initial_price = price_history['Close'].iloc[0]
     final_price = price_history['Close'].iloc[-1]
-    total_return = (final_price - initial_price) / initial_price
-    return total_return
+    return (final_price - initial_price) / initial_price
+
 
 def compute_annualized_volatility(price_history):
     returns = compute_returns(price_history)
     if returns.empty:
-        print("No returns to compute volatility.")
         return None
-    daily_volatility = returns.std()
-    annualized_volatility = daily_volatility * np.sqrt(252)
-    return annualized_volatility
+    return returns.std() * np.sqrt(252)
 
-def compute_sharpe_ratio(price_history, risk_free_rate=0.01):
+
+def compute_sharpe_ratio(price_history, risk_free_rate=0.05):
     returns = compute_returns(price_history)
     if returns.empty:
-        print("No returns to compute Sharpe ratio.")
         return None
     excess_returns = returns - risk_free_rate / 252
-    sharpe_ratio = excess_returns.mean() / excess_returns.std() * np.sqrt(252)
-    return sharpe_ratio
+    return excess_returns.mean() / excess_returns.std() * np.sqrt(252)
+
 
 def compute_max_drawdown(price_history):
-    if 'Close' not in price_history.columns:
-        print("Price history must contain a 'Close' column.")
+    if price_history.empty or 'Close' not in price_history.columns:
         return None
     cumulative_max = price_history['Close'].cummax()
     drawdown = (price_history['Close'] - cumulative_max) / cumulative_max
-    max_drawdown = drawdown.min()
-    return max_drawdown
+    return drawdown.min()
+
 
 def compute_rolling_volatility(price_history, window=20):
     returns = compute_returns(price_history)
     if returns.empty:
-        print("No returns to compute rolling volatility.")
         return pd.Series()
-    rolling_volatility = returns.rolling(window=window).std() * np.sqrt(252)
-    return rolling_volatility
+    return returns.rolling(window=window).std() * np.sqrt(252)
+
 
 def compare_tickers(ticker1, ticker2, period='1y', interval='1d'):
     history1 = get_price_history(ticker1, period, interval)
     history2 = get_price_history(ticker2, period, interval)
-    metrics = {
+
+    if history1.empty:
+        return f"Could not fetch data for {ticker1}."
+    if history2.empty:
+        return f"Could not fetch data for {ticker2}."
+
+    return {
         ticker1: {
             "total_return": compute_total_return(history1),
             "annualized_volatility": compute_annualized_volatility(history1),
@@ -133,4 +144,3 @@ def compare_tickers(ticker1, ticker2, period='1y', interval='1d'):
             "max_drawdown": compute_max_drawdown(history2)
         }
     }
-    return metrics
