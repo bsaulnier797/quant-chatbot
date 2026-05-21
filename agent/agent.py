@@ -207,7 +207,7 @@ def ask(client, question: str, mode: str = "expert", history: list = None) -> st
                     tool_name = block.name
                     tool_input = block.input.get("input", "") or str(block.input)
                     tool_fn = TOOL_MAP.get(tool_name)
-                    result = tool_fn.invoke(tool_input) if tool_fn else "Tool not found"
+                    result = tool_fn(**tool_input) if tool_fn else "Tool not found"
                     tool_results.append({
                         "type": "tool_result",
                         "tool_use_id": block.id,
