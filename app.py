@@ -229,6 +229,11 @@ def run_ml_pipeline(ticker: str, period: str = "2y"):
         return None
 
     cv_results = walk_forward_validate(X, y)
+
+    # Guard: if CV produced no valid folds, bail out cleanly
+    if not cv_results:
+        return None
+
     model = train_model(X, y)
     importance = get_feature_importance(model, X.columns.tolist())
 
