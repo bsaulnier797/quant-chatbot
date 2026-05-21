@@ -1,4 +1,3 @@
-from langchain.tools import tool
 from data.stock_data import (
     get_price_history,
     get_current_price,
@@ -12,7 +11,7 @@ import plotly.graph_objects as go
 import numpy as np
 
 
-@tool
+
 def stock_performance_tool(input: str) -> str:
     """
     Use this tool when the user asks how a stock has performed, its returns,
@@ -47,7 +46,7 @@ def stock_performance_tool(input: str) -> str:
     )
 
 
-@tool
+
 def plot_current_price(input: str) -> str:
     """
     Use this tool when the user asks for the current or live price of a stock.
@@ -69,7 +68,7 @@ def plot_current_price(input: str) -> str:
     )
 
 
-@tool
+
 def plot_price_history(input: str) -> str:
     """
     Use this tool to generate a price history chart for a stock over a specified period.
@@ -98,7 +97,6 @@ def plot_price_history(input: str) -> str:
     )
 
 
-@tool
 def plot_comparison_table(input: str) -> str:
     """
     Use this tool to compare multiple stocks side by side over a specified period.
@@ -209,7 +207,6 @@ def plot_monte_carlo_simulation(data, ticker):
     return fig
 
 
-@tool
 def monte_carlo_simulation_tool(input: str) -> str:
     """
     Use this tool when the user asks about future price scenarios, risk analysis,
