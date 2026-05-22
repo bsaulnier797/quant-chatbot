@@ -11,7 +11,12 @@ def build_features(ticker: str, period: str = '2y'):
     return X, y, prices
 
 
-def walk_forward_validate(X: pd.DataFrame, y: pd.Series, initial_train_size: int = 252, step_size: int = 21) -> list[dict]:
+def walk_forward_validate(
+    X: pd.DataFrame,
+    y: pd.Series,
+    initial_train_size: int = None,
+    step_size: int = 21
+) -> list[dict]:
     """
     Perform walk-forward validation on the dataset.
 
@@ -21,21 +26,35 @@ def walk_forward_validate(X: pd.DataFrame, y: pd.Series, initial_train_size: int
     Args:
         X:                  feature DataFrame
         y:                  target Series
-        initial_train_size: samples in the first training set (default: 1 year of trading days)
+        initial_train_size: samples in the first training set. Defaults to
+                            60% of the dataset so short-history tickers still
+                            produce folds rather than returning an empty list.
         step_size:          samples per test window (default: ~1 month of trading days)
 
     Returns:
-        List of dicts with accuracy, precision, recall, and f1 for each fold
+        List of dicts with accuracy, precision, recall, and f1 for each fold.
+        Returns empty list only if dataset is too small to form a single fold.
     """
+    # Adaptive initial training size: 60% of data, floored at 60 rows minimum
+    if initial_train_size is None:
+        initial_train_size = max(60, int(len(X) * 0.6))
+
+    # Safety: if we can't even form one fold, return empty immediately
+    if len(X) < initial_train_size + step_size:
+        return []
+
+    # Clean NaNs consistently with train_model
+    X_clean = X.ffill().bfill()
+
     results = []
 
-    for start in range(initial_train_size, len(X), step_size):
+    for start in range(initial_train_size, len(X_clean), step_size):
         end = start + step_size
-        if end > len(X):
+        if end > len(X_clean):
             break
 
-        X_train, y_train = X.iloc[:start], y.iloc[:start]
-        X_test, y_test = X.iloc[start:end], y.iloc[start:end]
+        X_train, y_train = X_clean.iloc[:start], y.iloc[:start]
+        X_test, y_test = X_clean.iloc[start:end], y.iloc[start:end]
 
         model = _make_model()
         model.fit(X_train, y_train)

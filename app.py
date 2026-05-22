@@ -71,6 +71,15 @@ CONCEPT_EXPLANATIONS = {
 # HELPERS
 # =============================================================================
 
+def get_api_key() -> str:
+    """Retrieve the Anthropic API key from Streamlit secrets or environment."""
+    try:
+        return st.secrets["anthropic"]["api_key"]
+    except Exception:
+        import os
+        return os.getenv("ANTHROPIC_API_KEY", "")
+
+
 def extract_tickers(text: str, max_tickers: int = 3) -> list[str]:
     """Pull validated tickers out of a free-text question."""
     raw = re.findall(r'\$([A-Z]{1,5})\b|\b([A-Z]{2,5})\b', text.upper())
@@ -78,7 +87,9 @@ def extract_tickers(text: str, max_tickers: int = 3) -> list[str]:
     candidates = [t for t in candidates if t not in STOPWORDS and len(t) >= 2]
 
     validated = []
-    for ticker in candidates[:max_tickers]:
+    for ticker in candidates[:max_tickers * 2]:  # check a wider pool but cap results
+        if len(validated) >= max_tickers:
+            break
         try:
             df = get_price_history(ticker, "5d")
             if not df.empty:
@@ -101,9 +112,10 @@ def detect_period(text: str) -> str:
 
 
 def generate_followups(question: str, response: str, mode: str) -> list:
-    import anthropic, json, os
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    import anthropic
+    import json
     try:
+        client = anthropic.Anthropic(api_key=get_api_key())
         prompt = f"""The user asked: "{question}"
 The assistant responded: "{response[:600]}"
 
@@ -226,23 +238,22 @@ def run_ml_pipeline(ticker: str, period: str = "2y"):
     """Full ML pipeline: features -> walk-forward CV -> final model -> backtest."""
     X, y, prices = build_features(ticker, period=period)
     if X.empty:
-        return None
+        return {"error": f"Could not build features for {ticker}. Check that the ticker is valid and has sufficient price history."}
 
     cv_results = walk_forward_validate(X, y)
-
-    # Guard: if CV produced no valid folds, bail out cleanly
     if not cv_results:
-        return None
+        return {"error": f"Not enough data to run walk-forward validation for {ticker} "
+                         f"({len(X)} rows after feature engineering). Try a ticker with more history."}
 
     model = train_model(X, y)
     importance = get_feature_importance(model, X.columns.tolist())
 
-    # Backtest on the second half of the data (out-of-sample for the model)
+    # Backtest on the second half of the data (out-of-sample)
     split = len(X) // 2
-    test_X, test_y = X.iloc[split:], y.iloc[split:]
+    test_X = X.iloc[split:]
     test_prices = prices.iloc[split:]
 
-    predictions = model.predict(test_X)
+    predictions = model.predict(test_X.ffill().bfill())
     strategy_returns = simulate_strategy(predictions, test_prices)
     benchmark_returns = test_prices["Close"].pct_change().dropna()
 
@@ -294,7 +305,10 @@ def render_ml_tab():
 
     results = st.session_state.get("ml_results")
     if results is None:
-        st.error(f"Could not build features for {ticker}. Try a different ticker.")
+        st.error(f"Pipeline returned no results for {ticker}. Try rebooting the app.")
+        return
+    if "error" in results:
+        st.error(results["error"])
         return
 
     cached_ticker = st.session_state.get("ml_ticker_cached", ticker)

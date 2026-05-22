@@ -55,10 +55,14 @@ def build_feature_matrix(ticker: str, period: str = '2y') -> tuple[pd.DataFrame,
     # RSI
     df['rsi_14'] = compute_rsi(df['Close'], window=14)
 
-    # Moving average crossover signal
+    # Moving average crossover signal — use MA-20 and MA-50 instead of MA-50/MA-200.
+    # MA-200 burns the first 200 rows on dropna, leaving too little data for walk-forward CV.
+    ma_20 = df['Close'].rolling(window=20).mean()
     ma_50 = df['Close'].rolling(window=50).mean()
-    ma_200 = df['Close'].rolling(window=200).mean()
-    df['ma_signal'] = (ma_50 > ma_200).astype(int)
+    df['ma_signal'] = (ma_20 > ma_50).astype(int)
+
+    # Price relative to MA-50 (momentum feature)
+    df['price_vs_ma50'] = df['Close'] / ma_50 - 1
 
     # Volume change vs 5-day average
     df['volume_change'] = df['Volume'] / df['Volume'].rolling(window=5).mean() - 1
@@ -69,7 +73,7 @@ def build_feature_matrix(ticker: str, period: str = '2y') -> tuple[pd.DataFrame,
     feature_cols = [
         'lag_return_1', 'lag_return_5', 'lag_return_10', 'lag_return_20',
         'rolling_vol_10', 'rolling_vol_20', 'rolling_sharpe',
-        'rsi_14', 'ma_signal', 'volume_change'
+        'rsi_14', 'ma_signal', 'price_vs_ma50', 'volume_change'
     ]
 
     # Drop rows with NaN from rolling windows and the last row (no target)
