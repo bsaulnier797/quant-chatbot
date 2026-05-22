@@ -79,35 +79,12 @@ def get_price_history(ticker: str, period: str = '1y', interval: str = '1d') -> 
 def get_current_price(ticker: str) -> dict:
     """
     Fetch the current price for a ticker with a 60-second cache.
-    Uses fast_info instead of info — much less rate-limited.
-    Falls back to the last close from cached history if yfinance is unavailable.
+    Checks the local SQLite history cache first to avoid hitting
+    Yahoo Finance's rate limiter on every price request.
     """
-    for attempt in range(3):
-        try:
-            stock = yf.Ticker(ticker)
-            # fast_info is a lightweight endpoint — avoids the heavy /quoteSummary call
-            fast = stock.fast_info
-            price = getattr(fast, "last_price", None) or getattr(fast, "previous_close", None)
-
-            if price is not None:
-                return {
-                    "ticker": ticker,
-                    "price": round(float(price), 2),
-                    "currency": getattr(fast, "currency", "USD"),
-                    "company_name": ticker,  # fast_info doesn't expose longName
-                }
-
-        except Exception as e:
-            if attempt < 2:
-                if _is_rate_limit_error(e):
-                    time.sleep(10 + random.uniform(0, 5))
-                else:
-                    _backoff(attempt)
-                continue
-
-    # Final fallback: last close from cached history
+    # Try the local cache first — last close is good enough for display
     try:
-        df = get_price_history(ticker, "5d")
+        df = load_price_history(ticker, "daily_history")
         if not df.empty:
             return {
                 "ticker": ticker,
@@ -117,6 +94,27 @@ def get_current_price(ticker: str) -> dict:
             }
     except Exception:
         pass
+
+    # Fall back to yfinance fast_info if no cache exists
+    for attempt in range(3):
+        try:
+            stock = yf.Ticker(ticker)
+            fast = stock.fast_info
+            price = getattr(fast, "last_price", None) or getattr(fast, "previous_close", None)
+            if price is not None:
+                return {
+                    "ticker": ticker,
+                    "price": round(float(price), 2),
+                    "currency": getattr(fast, "currency", "USD"),
+                    "company_name": ticker,
+                }
+        except Exception as e:
+            if attempt < 2:
+                if _is_rate_limit_error(e):
+                    time.sleep(10 + random.uniform(0, 5))
+                else:
+                    _backoff(attempt)
+            continue
 
     return {
         "ticker": ticker,
