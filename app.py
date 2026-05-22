@@ -5,8 +5,6 @@ import pandas as pd
 import re
 from agent.agent import build_agent, ask
 from data.stock_data import get_price_history
-from data.database import initialize_database
-from pipeline.ingest import run_watchlist_ingestion
 from charts.plotting import (
     plot_candlestick_chart,
     plot_with_moving_averages,
@@ -87,7 +85,7 @@ def extract_tickers(text: str, max_tickers: int = 3) -> list[str]:
     candidates = [t for t in candidates if t not in STOPWORDS and len(t) >= 2]
 
     validated = []
-    for ticker in candidates[:max_tickers * 2]:  # check a wider pool but cap results
+    for ticker in candidates[:max_tickers * 2]:
         if len(validated) >= max_tickers:
             break
         try:
@@ -162,7 +160,7 @@ def try_render_chart(question: str):
         if len(tickers) == 1:
             return plot_candlestick_chart(get_price_history(tickers[0], period), tickers[0])
 
-        # Multiple tickers -- normalized comparison line chart
+        # Multiple tickers — normalized comparison line chart
         fig = go.Figure()
         for ticker in tickers:
             df = get_price_history(ticker, period)
@@ -230,7 +228,7 @@ def handle_chat_message(prompt: str, mode: str):
 
 
 # =============================================================================
-# ML FORECAST TAB -- cached so it doesn't retrain on every rerun
+# ML FORECAST TAB
 # =============================================================================
 
 @st.cache_data(show_spinner=False)
@@ -444,12 +442,6 @@ with st.sidebar:
     st.caption("Data sourced from Yahoo Finance via yfinance.")
 
 # Session state init
-if "db_initialized" not in st.session_state:
-    with st.spinner("Initializing data pipeline..."):
-        initialize_database()
-        run_watchlist_ingestion()
-    st.session_state.db_initialized = True
-
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "agent" not in st.session_state:
