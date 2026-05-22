@@ -34,7 +34,6 @@ def _clean(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = [c.capitalize() for c in df.columns]
     if "Close" not in df.columns:
         return pd.DataFrame()
-    # Keep only OHLCV columns that exist
     cols = [c for c in ["Open", "High", "Low", "Close", "Volume"] if c in df.columns]
     df = df[cols].dropna(subset=["Close"])
     df.index = pd.to_datetime(df.index)
@@ -57,21 +56,38 @@ def _period_to_days(period: str) -> int:
     return mapping.get(period.lower(), 370)
 
 
+def _to_stooq_ticker(ticker: str) -> str:
+    """
+    Convert a standard ticker to Stooq format.
+    US stocks require a '.us' suffix (e.g. NVDA -> nvda.us).
+    Tickers that already have an exchange suffix are passed through unchanged.
+    """
+    ticker = ticker.upper().strip()
+    # Already has a dot suffix (e.g. BRK-B, ^GSPC, AAPL.US) — normalise and return
+    if "." in ticker:
+        return ticker.lower()
+    # Common index symbols pass through as-is
+    if ticker.startswith("^"):
+        return ticker
+    return f"{ticker.lower()}.us"
+
+
 def _fetch_stooq(ticker: str, period: str) -> pd.DataFrame:
     """
     Fetch OHLCV data from Stooq via pandas_datareader.
-    Stooq returns data newest-first, so we reverse it.
     No API key required, no rate limits.
+    Stooq returns data newest-first so we reverse it.
     """
     if not STOOQ_AVAILABLE:
         return pd.DataFrame()
 
     try:
+        stooq_ticker = _to_stooq_ticker(ticker)
         days = _period_to_days(period)
         end = pd.Timestamp.today()
         start = end - pd.Timedelta(days=days)
 
-        df = pdr.get_data_stooq(ticker, start=start, end=end)
+        df = pdr.get_data_stooq(stooq_ticker, start=start, end=end)
         if df.empty:
             return pd.DataFrame()
 
@@ -118,12 +134,10 @@ def get_price_history(ticker: str, period: str = "1y", interval: str = "1d") -> 
     Tries Stooq first (no rate limits, no API key), falls back to yfinance.
     Results are cached in memory for 1 hour.
     """
-    # Primary: Stooq
     df = _fetch_stooq(ticker, period)
     if not df.empty:
         return df
 
-    # Fallback: yfinance
     print(f"[stock_data] Stooq returned no data for {ticker}, trying yfinance...")
     return _fetch_yfinance(ticker, period)
 
@@ -132,11 +146,10 @@ def get_price_history(ticker: str, period: str = "1y", interval: str = "1d") -> 
 def get_current_price(ticker: str) -> dict:
     """
     Fetch the current/latest price for a ticker.
-    Uses the most recent close from Stooq first, then falls back to
-    yfinance fast_info for a more real-time value.
+    Uses Stooq last close first, then falls back to yfinance fast_info.
     Results cached for 60 seconds.
     """
-    # Try Stooq last close first (end-of-day, reliable)
+    # Try Stooq last close (end-of-day, reliable)
     try:
         df = _fetch_stooq(ticker, "5d")
         if not df.empty:
@@ -149,7 +162,7 @@ def get_current_price(ticker: str) -> dict:
     except Exception:
         pass
 
-    # Fallback: yfinance fast_info for more real-time price
+    # Fallback: yfinance fast_info
     for attempt in range(3):
         try:
             fast = yf.Ticker(ticker).fast_info
