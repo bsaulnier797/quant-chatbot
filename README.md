@@ -160,4 +160,4 @@ streamlit run app.py
 
 Built by Brett Saulnier, data science and mathematics student at the University of Wisconsin-Madison.
 
-[GitHub](https://github.com/bsaulnier797) | [LinkedIn](#)
+[GitHub](https://github.com/bsaulnier797) 
