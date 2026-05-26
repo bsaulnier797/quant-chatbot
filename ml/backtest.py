@@ -6,11 +6,16 @@ def simulate_strategy(predictions, prices: pd.DataFrame) -> pd.Series:
     """
     Simulate a simple long/hold strategy based on model predictions.
 
-    Logic: if the model predicted up (1) for day t, capture that day's
-    return. If it predicted down (0), stay in cash (return = 0).
+    Logic: if the model predicted up (1) for day t, we enter a position
+    at day t's close and capture day t+1's return. If it predicted down (0),
+    we stay in cash (return = 0).
+
+    The key fix here: predictions[t] forecasts tomorrow's direction, so we
+    need to capture tomorrow's return, not today's. We do this by shifting
+    the prediction forward by one day before multiplying.
 
     Args:
-        predictions: array-like of 0/1 predictions aligned to prices
+        predictions: array-like of 0/1 predictions aligned to prices index
         prices:      DataFrame with a 'Close' column
 
     Returns:
@@ -19,10 +24,11 @@ def simulate_strategy(predictions, prices: pd.DataFrame) -> pd.Series:
     df = pd.DataFrame({
         'prediction': predictions,
         'close': prices['Close']
-    }).dropna()
+    })
 
     df['daily_return'] = df['close'].pct_change()
-    df['strategy_return'] = df['daily_return'] * df['prediction']
+
+    df['strategy_return'] = df['daily_return'] * df['prediction'].shift(1)
 
     return df['strategy_return'].dropna()
 
@@ -45,32 +51,28 @@ def compute_strategy_metrics(
     """
     def _metrics(returns, label):
         total_return = (1 + returns).prod() - 1
-        annualized = (1 + total_return) ** (252 / len(returns)) - 1
+        annualized = (1 + total_return) ** (252 / max(len(returns), 1)) - 1
 
-        # Volatility from daily returns, annualized
         volatility = returns.std() * np.sqrt(252)
 
-        # Sharpe: excess return over risk-free rate
         daily_rf = risk_free_rate / 252
         excess = returns - daily_rf
-        sharpe = (excess.mean() / excess.std()) * np.sqrt(252) if excess.std() > 0 else 0
+        sharpe = (excess.mean() / excess.std()) * np.sqrt(252) if excess.std() > 0 else 0.0
 
-        # Max drawdown from equity curve
         equity = (1 + returns).cumprod()
         drawdown = (equity.cummax() - equity) / equity.cummax()
         max_drawdown = drawdown.max()
 
-        # Win rate: % of trading days with positive return
         active_days = returns[returns != 0]
-        win_rate = (active_days > 0).mean() if len(active_days) > 0 else 0
+        win_rate = (active_days > 0).mean() if len(active_days) > 0 else 0.0
 
         return {
             f'{label}_total_return': round(total_return, 4),
             f'{label}_annualized_return': round(annualized, 4),
             f'{label}_volatility': round(volatility, 4),
-            f'{label}_sharpe': round(sharpe, 4),
-            f'{label}_max_drawdown': round(max_drawdown, 4),
-            f'{label}_win_rate': round(win_rate, 4),
+            f'{label}_sharpe': round(float(sharpe), 4),
+            f'{label}_max_drawdown': round(float(max_drawdown), 4),
+            f'{label}_win_rate': round(float(win_rate), 4),
         }
 
     result = {}
@@ -83,6 +85,9 @@ def build_equity_curve(strategy_returns: pd.Series, benchmark_returns: pd.Series
     """
     Build an equity curve starting at $1 for both strategy and benchmark.
 
+    Uses fillna(0) instead of dropna() so that cash days (prediction=0,
+    strategy_return=0) are preserved in the curve rather than dropped.
+
     Args:
         strategy_returns:  daily strategy returns from simulate_strategy()
         benchmark_returns: daily buy-and-hold returns aligned to same period
@@ -93,9 +98,10 @@ def build_equity_curve(strategy_returns: pd.Series, benchmark_returns: pd.Series
     df = pd.DataFrame({
         'strategy': strategy_returns,
         'benchmark': benchmark_returns
-    }).dropna()
+    })
 
-    # Start both at 1.0 -- growth of $1 invested
+    df = df.fillna(0)
+
     df['strategy'] = (1 + df['strategy']).cumprod()
     df['benchmark'] = (1 + df['benchmark']).cumprod()
 
@@ -103,8 +109,6 @@ def build_equity_curve(strategy_returns: pd.Series, benchmark_returns: pd.Series
 
 
 if __name__ == "__main__":
-    # Quick sanity check -- strategy that's always right should beat benchmark
-    import numpy as np
     dates = pd.date_range('2023-01-01', periods=252, freq='B')
     prices = pd.DataFrame({'Close': 100 + np.random.randn(252).cumsum()}, index=dates)
     daily_returns = prices['Close'].pct_change().dropna()

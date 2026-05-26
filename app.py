@@ -233,7 +233,7 @@ def handle_chat_message(prompt: str, mode: str):
 
 @st.cache_data(show_spinner=False)
 def run_ml_pipeline(ticker: str, period: str = "2y"):
-    """Full ML pipeline: features -> walk-forward CV -> final model -> backtest."""
+    """Full ML pipeline: features -> walk-forward CV -> train -> evaluate -> backtest."""
     X, y, prices = build_features(ticker, period=period)
     if X.empty:
         return {"error": f"Could not build features for {ticker}. Check that the ticker is valid and has sufficient price history."}
@@ -243,28 +243,31 @@ def run_ml_pipeline(ticker: str, period: str = "2y"):
         return {"error": f"Not enough data to run walk-forward validation for {ticker} "
                          f"({len(X)} rows after feature engineering). Try a ticker with more history."}
 
-    model = train_model(X, y)
-    importance = get_feature_importance(model, X.columns.tolist())
-
-    # Backtest on the second half of the data (out-of-sample)
+    # Split into train/test before fitting the final model
     split = len(X) // 2
-    test_X = X.iloc[split:]
+    X_train, X_test = X.iloc[:split], X.iloc[split:]
+    y_train, y_test = y.iloc[:split], y.iloc[split:]
     test_prices = prices.iloc[split:]
 
-    predictions = model.predict(test_X.ffill().bfill())
+    # Train on first half, evaluate on second half (true out-of-sample)
+    model = train_model(X_train, y_train)
+    held_out_metrics = evaluate_model(model, X_test, y_test)
+
+    importance = get_feature_importance(model, X.columns.tolist())
+
+    predictions = model.predict(X_test.ffill().bfill())
     strategy_returns = simulate_strategy(predictions, test_prices)
     benchmark_returns = test_prices["Close"].pct_change().dropna()
 
-    # Align indices
     common_idx = strategy_returns.index.intersection(benchmark_returns.index)
     strategy_returns = strategy_returns.loc[common_idx]
     benchmark_returns = benchmark_returns.loc[common_idx]
 
-    metrics = compute_strategy_metrics(strategy_returns, benchmark_returns)
+    backtest_metrics = compute_strategy_metrics(strategy_returns, benchmark_returns)
     equity = build_equity_curve(strategy_returns, benchmark_returns)
     next_pred = predict_next_day(model, X)
 
-    avg_metrics = {
+    avg_cv_metrics = {
         "accuracy": sum(r["accuracy"] for r in cv_results) / len(cv_results),
         "precision": sum(r["precision"] for r in cv_results) / len(cv_results),
         "recall": sum(r["recall"] for r in cv_results) / len(cv_results),
@@ -272,9 +275,10 @@ def run_ml_pipeline(ticker: str, period: str = "2y"):
     }
 
     return {
-        "cv_metrics": avg_metrics,
+        "cv_metrics": avg_cv_metrics,
+        "held_out_metrics": held_out_metrics,
         "importance": importance,
-        "metrics": metrics,
+        "metrics": backtest_metrics,
         "equity": equity,
         "next_pred": next_pred,
     }
@@ -297,6 +301,8 @@ def render_ml_tab():
         return
 
     if train:
+        # Clear previous results so stale data never shows for a new ticker
+        st.session_state.pop("ml_results", None)
         with st.spinner(f"Building features, validating, and backtesting for {ticker}..."):
             st.session_state.ml_results = run_ml_pipeline(ticker)
             st.session_state.ml_ticker_cached = ticker
@@ -323,12 +329,18 @@ def render_ml_tab():
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.markdown("**Model Performance (CV avg)**")
+        st.markdown("**Walk-Forward CV (avg)**")
         cv = results["cv_metrics"]
         st.metric("Accuracy", f"{cv['accuracy']*100:.1f}%")
         st.metric("Precision", f"{cv['precision']*100:.1f}%")
         st.metric("Recall", f"{cv['recall']*100:.1f}%")
         st.metric("F1 Score", f"{cv['f1']*100:.1f}%")
+
+        # Held-out test set evaluation
+        st.markdown("**Held-Out Test Set**")
+        ho = results["held_out_metrics"]
+        st.metric("Test Accuracy", f"{ho['accuracy']*100:.1f}%")
+        st.metric("Test F1", f"{ho['f1_score']*100:.1f}%")
 
     with col2:
         st.markdown("**Strategy vs Benchmark**")
@@ -338,7 +350,7 @@ def render_ml_tab():
         st.metric("Strategy Sharpe", f"{m['strategy_sharpe']:.2f}",
                   delta=f"{m['strategy_sharpe'] - m['benchmark_sharpe']:.2f} vs B&H")
         st.metric("Max Drawdown", f"{m['strategy_max_drawdown']*100:.1f}%")
-        st.metric("Win Rate", f"{m['win_rate']*100:.1f}%")
+        st.metric("Win Rate", f"{m['strategy_win_rate']*100:.1f}%")
 
     with col3:
         st.markdown("**Feature Importance**")
@@ -359,7 +371,6 @@ def render_ml_tab():
         hovermode="x unified", height=400
     )
     st.plotly_chart(fig, use_container_width=True)
-
 
 # =============================================================================
 # CHAT TAB
