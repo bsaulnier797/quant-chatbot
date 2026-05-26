@@ -15,7 +15,7 @@ def walk_forward_validate(
     X: pd.DataFrame,
     y: pd.Series,
     initial_train_size: int = None,
-    step_size: int = 21
+    step_size: int = 42
 ) -> list[dict]:
     """
     Perform walk-forward validation on the dataset.
@@ -141,7 +141,7 @@ def predict_next_day(model: xgb.XGBClassifier, X: pd.DataFrame) -> dict:
 def _make_model() -> xgb.XGBClassifier:
     """Internal helper to keep model hyperparameters consistent across training and validation."""
     return xgb.XGBClassifier(
-        n_estimators=100,
+        n_estimators=50,
         max_depth=3,
         learning_rate=0.05,
         subsample=0.8,

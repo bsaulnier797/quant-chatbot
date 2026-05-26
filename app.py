@@ -232,7 +232,7 @@ def handle_chat_message(prompt: str, mode: str):
 # =============================================================================
 
 @st.cache_data(show_spinner=False)
-def run_ml_pipeline(ticker: str, period: str = "2y"):
+def run_ml_pipeline(ticker: str, period: str = "1y"):
     """Full ML pipeline: features -> walk-forward CV -> train -> evaluate -> backtest."""
     X, y, prices = build_features(ticker, period=period)
     if X.empty:
