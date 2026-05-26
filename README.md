@@ -1,36 +1,34 @@
-# Finance & Quant Chatbot 📈
+# Finance and Quant Chatbot
 
-Ask plain English questions about stocks and get back real analysis with interactive charts. No spreadsheets, no digging through financial sites -- just type what you want to know.
+A conversational AI app that lets you ask plain English questions about stocks, returns, volatility, and other quantitative finance concepts. Built with Python, Streamlit, and the Anthropic API.
 
-[**Try it live**](https://bsaulnier797-quant-chatbot-app-magfyv.streamlit.app/) 
+[**Try the live app**](https://bsaulnier797-quant-chatbot-app-magfyv.streamlit.app)
 
 ---
 
-## The idea
+## Why I built this
 
-I wanted a tool where you could type something like "how has NVDA performed over the last 6 months?" and actually get a useful answer -- not just a number, but context, charts, and the math behind it. So I built one.
-
-It pulls real market data, runs quantitative calculations, and responds through an AI agent that understands what you're actually asking. Whether you're checking Sharpe ratios or just curious how two stocks have moved relative to each other, it handles it conversationally.
+I wanted a tool where you could type something like "How has NVDA performed over the last six months?" and get back a real answer with charts and the math behind it, not just a number. Most finance tools either require you to already know what you're looking for or give you raw data with no explanation. This tries to do both at once.
 
 ---
 
 ## What you can do with it
 
-- Ask questions in plain English -- no special syntax needed
-- Get candlestick charts, moving averages, returns distributions, and correlation heatmaps auto-generated based on what you asked
-- See quant metrics like Sharpe ratio, max drawdown, annualized volatility, and total return
+- Ask questions in plain English, no special syntax needed
+- Get candlestick charts, moving averages, returns distributions, and correlation heatmaps generated automatically based on what you asked
+- See quant metrics including Sharpe ratio, max drawdown, annualized volatility, and total return
 - Compare multiple tickers side by side with normalized performance charts
-- Switch between **Expert mode** (direct analysis) and **Learning mode** (plain English explanations)
-- Use the sidebar to look up finance concepts like beta, correlation, or max drawdown without losing your place in the conversation
+- Switch between **Expert mode** (direct analysis with the numbers) and **Learning mode** (plain English explanations for people newer to finance)
+- Look up finance concepts like beta, correlation, and max drawdown in the sidebar without losing your place in the conversation
 - Get AI-suggested follow-up questions after each response so you can keep exploring
 
 ---
 
 ## How it works
 
-When you send a message, an AI agent (Claude Haiku via the Anthropic API) reads your question and decides which data tools to call. Those tools hit yfinance for real market data, run the relevant calculations, and send the results back to the agent. The agent then writes a response and the frontend figures out whether to render a chart alongside it.
+When you send a message, a Claude Haiku agent reads your question and decides which data tools to call. Those tools pull real market data from yfinance, run the relevant calculations, and send the results back to the agent. The agent writes a response and the frontend determines whether to render a chart alongside it.
 
-There's also a data pipeline that runs on startup. It ingests price data for a default watchlist into a local SQLite database so repeated queries don't have to re-fetch the same data from scratch.
+There is also a data pipeline that runs on startup and ingests price data for a default watchlist into a local SQLite database, so repeated queries for the same tickers are faster.
 
 ```
 User message
@@ -47,18 +45,19 @@ User message
 
 ```
 quant-chatbot/
-├── app.py              # Streamlit UI and chat logic
+├── app.py                  # Streamlit UI and chat logic
 ├── agent/
-│   ├── agent.py        # Anthropic API agent with tool-calling loop
-│   └── tools.py        # Tool definitions wrapping the data layer
+│   ├── agent.py            # Anthropic API agent with tool-calling loop
+│   └── tools.py            # Tool definitions wrapping the data layer
 ├── data/
-│   ├── stock_data.py   # Price history, returns, and quant metrics
-│   └── database.py     # SQLite setup
+│   ├── stock_data.py       # Price history, returns, and quant metric calculations
+│   └── database.py         # SQLite database setup
 ├── charts/
-│   └── plotting.py     # Plotly chart functions
-├── memory/             # Conversation memory
+│   └── plotting.py         # Plotly chart functions
+├── memory/                 # Conversation memory utilities
 ├── pipeline/
-│   └── ingest.py       # Watchlist ingestion pipeline
+│   └── ingest.py           # Watchlist data ingestion pipeline
+├── notebooks/              # EDA and exploration notebooks
 └── requirements.txt
 ```
 
@@ -73,71 +72,52 @@ quant-chatbot/
 | Market data | yfinance |
 | Charts | Plotly |
 | Local cache | SQLite |
-| Language | Python |
+| Language | Python 3.12 |
 | Deployment | Streamlit Community Cloud |
 
 ---
 
 ## Running it locally
 
-**1. Clone and enter the repo**
+**1. Clone the repo**
 ```bash
 git clone https://github.com/bsaulnier797/quant-chatbot.git
 cd quant-chatbot
 ```
 
-**2. Set up a virtual environment**
+**2. Create a virtual environment and install dependencies**
 ```bash
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-**3. Add your API key**
+**3. Add your Anthropic API key**
 
-Create a `.env` file in the root:
+Create a `.env` file in the project root:
 ```
 ANTHROPIC_API_KEY=your_key_here
 ```
 
-Get a key at [console.anthropic.com](https://console.anthropic.com).
+You can get an API key at [console.anthropic.com](https://console.anthropic.com).
 
-**4. Start the app**
+**4. Run the app**
 ```bash
 streamlit run app.py
 ```
 
 ---
 
-## Deploying to Streamlit Cloud
+## Things worth knowing
 
-1. Push to GitHub
-2. Connect your repo at [share.streamlit.io](https://share.streamlit.io)
-3. Add `ANTHROPIC_API_KEY` under **Secrets** in the app settings
-4. Deploy
-
-One gotcha: your local `.env` file doesn't carry over to Streamlit Cloud. You have to add the key manually through their secrets manager or the app won't be able to call the API.
+- The app uses `yfinance` to fetch market data. Occasionally Yahoo Finance changes their API and data fetches may fail temporarily. If you see ticker errors, check that you are on `yfinance>=0.2.51`.
+- The SQLite cache lives locally and is not committed to the repo. It gets rebuilt on first run.
+- Streamlit Cloud deployments require secrets to be configured in the dashboard under **Settings > Secrets**. The local `.env` file does not transfer automatically.
 
 ---
 
-## Things worth trying
+## About
 
-- "How has NVDA performed over the last 6 months?"
-- "What is the Sharpe ratio of MSFT over 1 year?"
-- "Compare AAPL and GOOGL over 3 months"
-- "Show me the returns distribution for TSLA"
-- "Compare TSLA and SPY and show me a correlation heatmap"
+Built by Brett Saulnier, data science and mathematics student at the University of Wisconsin-Madison. This project was built as a portfolio piece covering data engineering, AI agent design, and frontend deployment.
 
----
-
-## A couple things I ran into
-
-**LangChain wasn't worth the trouble.** I started with LangChain for the agent layer but hit version incompatibilities with the Anthropic integration (v1.3.0) that weren't easy to work around. Scrapping it and calling the Anthropic API directly made everything more predictable and a lot easier to debug.
-
-**Chart rendering is trickier than it looks.** Deciding when to show a chart, and which type, based on a free-text question took more iteration than expected. Regex-based ticker extraction needs a solid stopword list or you end up treating words like "GDP" and "CEO" as stock tickers.
-
----
-
-## Author
-
-Brett Saulnier | [GitHub](https://github.com/bsaulnier797)
+[GitHub](https://github.com/bsaulnier797) | [LinkedIn](#)
